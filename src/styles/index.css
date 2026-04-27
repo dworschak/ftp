@@ -1,0 +1,42 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+/* Print styles for family tree */
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  /* Hide sidebar and header when printing */
+  body > div > div > div:first-child,
+  body > div > div > div:nth-child(2) > div:first-child {
+    display: none !important;
+  }
+
+  /* Ensure canvas area takes full page */
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Remove backgrounds */
+  .bg-muted\/30,
+  .bg-background {
+    background: white !important;
+  }
+
+  /* Optimize SVG for printing */
+  svg {
+    page-break-inside: avoid;
+  }
+
+  /* Show only the tree canvas */
+  .print\:overflow-visible {
+    overflow: visible !important;
+  }
+
+  .print\:bg-white {
+    background: white !important;
+  }
+}

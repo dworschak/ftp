@@ -1,0 +1,89 @@
+export interface Person {
+  id: string;
+  firstName: string;
+  lastName: string;
+  birthDate?: string;
+  birthPlace?: string;
+  deathDate?: string;
+  deathPlace?: string;
+  gender?: 'male' | 'female' | 'other';
+  fatherId?: string;
+  motherId?: string;
+  marriageDate?: string;
+  marriagePlace?: string;
+}
+
+export type GraphType = 'ancestor' | 'descendant' | 'hourglass';
+export type BackgroundSkin = 'white' | 'cream' | 'light-blue' | 'light-green';
+export type ColorScheme = 'uniform' | 'by-grandparent' | 'by-great-grandparent';
+export type DateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD MMM YYYY';
+export type LineStyle = 'straight' | 'rounded';
+
+export interface LayoutSettings {
+  textSize: number;
+  showBirthDate: boolean;
+  showBirthPlace: boolean;
+  showDeathDate: boolean;
+  showDeathPlace: boolean;
+  showMarriageInfo: boolean;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+  borderWidth: number;
+  lineWidth: number;
+  borderColor: string;
+  backgroundSkin: BackgroundSkin;
+  colorScheme: ColorScheme;
+  personBoxPadding: number;
+  horizontalSpacing: number;
+  verticalSpacing: number;
+  maxGenerations: number | null; // null means show all generations
+  dateFormat: DateFormat;
+  lineStyle: LineStyle;
+  swappedCouples: string[]; // Array of coupleKeys ("id1_id2" sorted) where mother is left, father right
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  rootPersonId: string;
+  graphType: GraphType;
+  layout: LayoutSettings;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FamilyTree {
+  id: string;
+  name: string;
+  people: Person[];
+  savedViews: SavedView[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const defaultLayoutSettings: LayoutSettings = {
+  textSize: 12,
+  showBirthDate: true,
+  showBirthPlace: true,
+  showDeathDate: true,
+  showDeathPlace: true,
+  showMarriageInfo: true,
+  marginTop: 20,
+  marginRight: 20,
+  marginBottom: 20,
+  marginLeft: 20,
+  borderWidth: 0,
+  lineWidth: 1,
+  borderColor: '#000000',
+  backgroundSkin: 'white',
+  colorScheme: 'by-great-grandparent',
+  personBoxPadding: 6,
+  horizontalSpacing: 10,
+  verticalSpacing: 60,
+  maxGenerations: 5, // Show all generations by default
+  dateFormat: 'DD.MM.YYYY',
+  lineStyle: 'straight',
+  swappedCouples: [],
+};
