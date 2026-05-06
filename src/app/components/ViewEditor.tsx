@@ -417,6 +417,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
 
       <PersonEditDialog
         person={editingPerson}
+        people={tree.people}
         open={dialogOpen}
         onClose={() => {
           setDialogOpen(false);

@@ -595,8 +595,8 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
       : children;
     const childXs = sortedChildren.map(c => getPixelX(c.x, c.width) + c.width / 2);
     // Spine range covers all children AND both parent drop points
-    const spineLeft  = isMultiChild ? Math.min(Math.min(...childXs), Math.min(fatherCenterX, motherCenterX)) : parentsMidX;
-    const spineRight = isMultiChild ? Math.max(Math.max(...childXs), Math.max(fatherCenterX, motherCenterX)) : parentsMidX;
+    const _spineLeft  = isMultiChild ? Math.min(Math.min(...childXs), Math.min(fatherCenterX, motherCenterX)) : parentsMidX; void _spineLeft;
+    const _spineRight = isMultiChild ? Math.max(Math.max(...childXs), Math.max(fatherCenterX, motherCenterX)) : parentsMidX; void _spineRight;
 
     // ── Parent bar (drawn once per couple) ─────────────────────────────────
     if (layout.lineStyle === 'rounded' && !isMultiChild) {
@@ -687,17 +687,30 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
         addLineLength(childCenterX, midY, childCenterX, childTopY);
       }
     } else {
-      // Multiple children: hub / spine pattern
-      //   Both parents drop straight to dropY → horizontal spine → vertical drops to each child
-      // Full horizontal spine (covers parent drop points + all children)
-      lines.push(<line key={`spine-${ck}`} x1={spineLeft} y1={dropY} x2={spineRight} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
-      addLineLength(spineLeft, dropY, spineRight, dropY);
+      // Multiple children: two-level pattern
+      //   Both parents drop to dropY → horizontal parent bar at dropY →
+      //   stem from midpoint down to childSpineY → horizontal child spine → vertical drops to children
+      //   This separates the couple-bar from the child-distribution bar and avoids
+      //   the overlap that occurs when a child column sits directly below one of the parents.
+      const childSpineY = dropY + dropDistance;
+      const childSpineLeft  = Math.min(parentsMidX, ...childXs);
+      const childSpineRight = Math.max(parentsMidX, ...childXs);
+
+      // Horizontal parent bar at dropY (joins both parent drop lines)
+      lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
+      // Stem from parent midpoint down to child spine
+      lines.push(<line key={`stem-${ck}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={childSpineY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(parentsMidX, dropY, parentsMidX, childSpineY);
+      // Horizontal child spine
+      lines.push(<line key={`spine-${ck}`} x1={childSpineLeft} y1={childSpineY} x2={childSpineRight} y2={childSpineY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(childSpineLeft, childSpineY, childSpineRight, childSpineY);
       // Vertical drop to each child's box top
       sortedChildren.forEach(child => {
         const childCenterX = getPixelX(child.x, child.width) + child.width / 2;
         const childTopY = getNodePixelY(child);
-        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={dropY} x2={childCenterX} y2={childTopY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
-        addLineLength(childCenterX, dropY, childCenterX, childTopY);
+        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={childSpineY} x2={childCenterX} y2={childTopY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+        addLineLength(childCenterX, childSpineY, childCenterX, childTopY);
       });
     }
     });
@@ -745,15 +758,28 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
           />
         );
       } else {
-        lines.push(
-          <line
-            key={`single-parent-${node.person.id}`}
-            x1={parentCenterX} y1={parentBottomY}
-            x2={childCenterX} y2={childTopY}
-            stroke={layout.borderColor} strokeWidth={layout.lineWidth}
-          />
-        );
-        addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
+        // Straight style: use orthogonal connector (down → across → down)
+        // to avoid long diagonal lines when parent and child are far apart horizontally.
+        if (Math.abs(childCenterX - parentCenterX) < 1) {
+          // Already vertically aligned – simple straight line
+          lines.push(
+            <line
+              key={`single-parent-${node.person.id}`}
+              x1={parentCenterX} y1={parentBottomY}
+              x2={childCenterX} y2={childTopY}
+              stroke={layout.borderColor} strokeWidth={layout.lineWidth}
+            />
+          );
+          addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
+        } else {
+          const midY = Math.round((parentBottomY + childTopY) / 2);
+          lines.push(<line key={`sp-v1-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={parentCenterX} y2={midY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`sp-h-${node.person.id}`}  x1={parentCenterX} y1={midY}          x2={childCenterX}  y2={midY}          stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`sp-v2-${node.person.id}`} x1={childCenterX}  y1={midY}          x2={childCenterX}  y2={childTopY}     stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+          addLineLength(parentCenterX, parentBottomY, parentCenterX, midY);
+          addLineLength(parentCenterX, midY, childCenterX, midY);
+          addLineLength(childCenterX, midY, childCenterX, childTopY);
+        }
       }
     });
 
