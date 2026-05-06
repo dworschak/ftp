@@ -42,6 +42,8 @@ export interface LayoutSettings {
   dateFormat: DateFormat;
   lineStyle: LineStyle;
   swappedCouples: string[]; // Array of coupleKeys ("id1_id2" sorted) where mother is left, father right
+  birthYearSpread: number;  // Max vertical offset in px between earliest/latest born within one generation row (0 = off)
+  minBoxWidth: number;       // Minimum person-box width in px (at scale 1.0); 0 = pure content width
 }
 
 export interface SavedView {
@@ -86,4 +88,6 @@ export const defaultLayoutSettings: LayoutSettings = {
   dateFormat: 'DD.MM.YYYY',
   lineStyle: 'straight',
   swappedCouples: [],
+  birthYearSpread: 0,
+  minBoxWidth: 50,
 };

@@ -208,6 +208,44 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
       </div>
 
       <div>
+        <label htmlFor="birthYearSpread" className="block text-sm mb-2">
+          Geburtsjahr-Streuung: {layout.birthYearSpread}px
+        </label>
+        <input
+          id="birthYearSpread"
+          type="range"
+          min="0"
+          max="200"
+          step="5"
+          value={layout.birthYearSpread}
+          onChange={(e) => handleChange('birthYearSpread', parseInt(e.target.value))}
+          className="w-full"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Früher Geborene weiter oben, später Geborene weiter unten (0 = aus)
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="minBoxWidth" className="block text-sm mb-2">
+          Mindestbreite Personenkachel: {layout.minBoxWidth}px
+        </label>
+        <input
+          id="minBoxWidth"
+          type="range"
+          min="0"
+          max="150"
+          step="5"
+          value={layout.minBoxWidth}
+          onChange={(e) => handleChange('minBoxWidth', parseInt(e.target.value))}
+          className="w-full"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          0 = reine Inhaltsbreite, kleiner Wert = kompaktere Kacheln
+        </p>
+      </div>
+
+      <div>
         <label htmlFor="boxPadding" className="block text-sm mb-2">
           Box Padding: {layout.personBoxPadding}px
         </label>

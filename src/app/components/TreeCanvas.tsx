@@ -120,7 +120,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     const lineGap = Math.round(4 * scale);
     const height = padding * 2 + scaledTextSize + (lines.length - 1) * (scaledTextSize + lineGap);
 
-    return { width: Math.max(width, 120 * scale), height: Math.max(height, 60 * scale) };
+    return { width: Math.max(width, layout.minBoxWidth * scale), height: Math.max(height, 40 * scale) };
     };
 
   const nodeMap = new Map<string, TreeNode>();
@@ -399,7 +399,8 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     genHeights.set(gen, maxHeight);
   });
 
-  const maxGeneration = Math.max(...allNodes.map(n => n.generation));
+  // maxGeneration is kept for reference but genPixelYs now uses sortedGens (occupied gens only)
+  const _maxGeneration = Math.max(...allNodes.map(n => n.generation)); void _maxGeneration;
 
     // ── Pixel-X layout ────────────────────────────────────────────────────────
     // Only LEAF x-positions (integer values) participate in the spacing sweep.
@@ -455,16 +456,52 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
 
   
 
-  // Pre-compute pixel Y for each generation to avoid O(n) lookups
+  // ── Birth-year vertical spread within a generation row ────────────────────
+  // Earlier-born persons sit higher (offset 0), later-born sit lower (offset up
+  // to layout.birthYearSpread px).  Persons without a parseable birth year stay
+  // at the baseline (offset 0).
+  const extractBirthYear = (dateStr: string | undefined): number | null => {
+    if (!dateStr) return null;
+    const m = dateStr.match(/\b(1[0-9]{3}|20[0-9]{2})\b/);
+    return m ? parseInt(m[1]) : null;
+  };
+  const birthYearOffsets = new Map<string, number>();
+  if (layout.birthYearSpread > 0) {
+    generations.forEach((genNodes) => {
+      const withYear = genNodes
+        .map(n => ({ id: n.person.id, year: extractBirthYear(n.person.birthDate) }))
+        .filter((x): x is { id: string; year: number } => x.year !== null);
+      if (withYear.length < 2) return;
+      const minYear = Math.min(...withYear.map(x => x.year));
+      const maxYear = Math.max(...withYear.map(x => x.year));
+      if (minYear === maxYear) return;
+      withYear.forEach(({ id, year }) => {
+        const frac = (year - minYear) / (maxYear - minYear);
+        birthYearOffsets.set(id, Math.round(frac * layout.birthYearSpread));
+      });
+    });
+  }
+
+  // Pre-compute pixel Y for each generation to avoid O(n) lookups.
+  // We iterate ONLY over occupied generations (those with actual nodes) so that
+  // generation numbers with no nodes don't reserve vertical space.  This
+  // eliminates the blank rows that appear at the top of shallow subtrees.
+  // Each row gap (except below the lowest/root row) is widened by birthYearSpread.
+  const sortedGens = [...generations.keys()].sort((a, b) => b - a); // desc: topmost first
   const genPixelYs = new Map<number, number>();
   {
     let y = layout.marginTop;
-    for (let g = maxGeneration; g >= 0; g--) {
+    sortedGens.forEach((g, i) => {
       genPixelYs.set(g, Math.round(y));
-      if (g > 0) y += (genHeights.get(g) || 80) + layout.verticalSpacing;
-    }
+      if (i < sortedGens.length - 1) {
+        y += (genHeights.get(g) ?? 0) + layout.birthYearSpread + layout.verticalSpacing;
+      }
+    });
   }
   const getPixelYCached = (generation: number) => genPixelYs.get(generation) ?? Math.round(layout.marginTop);
+  /** Pixel Y of the TOP EDGE of a specific node (base row Y + birth-year offset). */
+  const getNodePixelY = (node: TreeNode): number =>
+    getPixelYCached(node.generation) + (birthYearOffsets.get(node.person.id) ?? 0);
 
   // Canvas width: rightmost rendered node edge + right margin
   const canvasWidth = Math.ceil(
@@ -472,8 +509,8 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
   );
 
   let canvasHeight = layout.marginTop + layout.marginBottom;
-  genHeights.forEach(height => {
-    canvasHeight += height;
+  genHeights.forEach((height, gen) => {
+    canvasHeight += height + (layout.birthYearSpread > 0 && gen > 0 ? layout.birthYearSpread : 0);
   });
   canvasHeight += (genHeights.size - 1) * layout.verticalSpacing;
   canvasHeight = Math.ceil(canvasHeight);
@@ -526,41 +563,108 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     totalLineLength += Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
     };
 
+    // ── Group children by parent couple ──────────────────────────────────────
+    // When the same couple has multiple children visible in the tree (Ahnenschwund),
+    // this ensures the parent bar is drawn ONCE and a clean hub/spine pattern is used.
+    const coupleToChildren = new Map<string, { fn: TreeNode; mn: TreeNode; children: TreeNode[] }>();
     allNodes.forEach(node => {
-    // For line rendering, always use original fatherId/motherId for node lookup
-    const fatherNode = node.person.fatherId ? nodeMap.get(node.person.fatherId) : null;
-    const motherNode = node.person.motherId ? nodeMap.get(node.person.motherId) : null;
+      const fn = node.person.fatherId ? nodeMap.get(node.person.fatherId) : null;
+      const mn = node.person.motherId ? nodeMap.get(node.person.motherId) : null;
+      if (fn && mn) {
+        const ck = coupleKey(node.person.fatherId!, node.person.motherId!);
+        if (!coupleToChildren.has(ck)) coupleToChildren.set(ck, { fn, mn, children: [] });
+        coupleToChildren.get(ck)!.children.push(node);
+      }
+    });
 
-    const childCenterX = getPixelX(node.x, node.width) + node.width / 2;
-    const childTopY = getPixelYCached(node.generation);
+    // ── Two-parent family connections ─────────────────────────────────────────
+    coupleToChildren.forEach(({ fn: fatherNode, mn: motherNode, children }, ck) => {
+    const fatherCenterX = getPixelX(fatherNode.x, fatherNode.width) + fatherNode.width / 2;
+    const motherCenterX = getPixelX(motherNode.x, motherNode.width) + motherNode.width / 2;
+    const fatherBottomY = getNodePixelY(fatherNode) + fatherNode.height;
+    const motherBottomY = getNodePixelY(motherNode) + motherNode.height;
+    const parentBottomY = Math.max(fatherBottomY, motherBottomY);
+    const parentsMidX = (fatherCenterX + motherCenterX) / 2;
+    const dropDistance = 15;
+    const dropY = parentBottomY + dropDistance;
+    const isMultiChild = children.length > 1;
 
-    if (fatherNode && motherNode) {
-      const fatherCenterX = getPixelX(fatherNode.x, fatherNode.width) + fatherNode.width / 2;
-      const motherCenterX = getPixelX(motherNode.x, motherNode.width) + motherNode.width / 2;
-      const fatherBottomY = getPixelYCached(fatherNode.generation) + fatherNode.height;
-      const motherBottomY = getPixelYCached(motherNode.generation) + motherNode.height;
-      const parentBottomY = Math.max(fatherBottomY, motherBottomY);
-      const parentsMidX = (fatherCenterX + motherCenterX) / 2;
+    // Sort children left→right (needed for spine)
+    const sortedChildren = isMultiChild
+      ? [...children].sort((a, b) => (getPixelX(a.x, a.width) + a.width / 2) - (getPixelX(b.x, b.width) + b.width / 2))
+      : children;
+    const childXs = sortedChildren.map(c => getPixelX(c.x, c.width) + c.width / 2);
+    // Spine range covers all children AND both parent drop points
+    const spineLeft  = isMultiChild ? Math.min(Math.min(...childXs), Math.min(fatherCenterX, motherCenterX)) : parentsMidX;
+    const spineRight = isMultiChild ? Math.max(Math.max(...childXs), Math.max(fatherCenterX, motherCenterX)) : parentsMidX;
 
+    // ── Parent bar (drawn once per couple) ─────────────────────────────────
+    if (layout.lineStyle === 'rounded' && !isMultiChild) {
+      // Rounded single-child: U-shape connecting both parents at parentBottomY
+      const path1 = `M ${fatherCenterX} ${fatherBottomY} L ${fatherCenterX} ${parentBottomY} L ${motherCenterX} ${parentBottomY} L ${motherCenterX} ${motherBottomY}`;
+      addLineLength(fatherCenterX, fatherBottomY, fatherCenterX, parentBottomY);
+      addLineLength(fatherCenterX, parentBottomY, motherCenterX, parentBottomY);
+      addLineLength(motherCenterX, parentBottomY, motherCenterX, motherBottomY);
+      lines.push(<path key={`parents-bar-${ck}`} d={path1} stroke={layout.borderColor} strokeWidth={layout.lineWidth} fill="none"/>);
+    } else {
+      // Straight style OR rounded multi-child: both parents drop straight to dropY.
+      // For rounded multi-child we use straight drops so that each drop endpoint
+      // lands exactly on the spine at dropY – no dangling line segments.
+      lines.push(<line key={`fd-${ck}`} x1={fatherCenterX} y1={fatherBottomY} x2={fatherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(fatherCenterX, fatherBottomY, fatherCenterX, dropY);
+      lines.push(<line key={`md-${ck}`} x1={motherCenterX} y1={motherBottomY} x2={motherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(motherCenterX, motherBottomY, motherCenterX, dropY);
+      if (!isMultiChild) {
+        // Single child (straight): f-to-m horizontal at dropY; spine handles it for multi-child
+        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+        addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
+      }
+    }
+
+    // ── Marriage info label ───────────────────────────────────────────────
+    if (layout.showMarriageInfo && (fatherNode.person.marriageDate || fatherNode.person.marriagePlace)) {
+      const labelX = parentsMidX;
+      const labelY = parentBottomY + layout.textSize + 2;
+      let marriageText = '⚭';
+      if (fatherNode.person.marriageDate) marriageText += ' ' + formatDate(fatherNode.person.marriageDate, layout.dateFormat);
+      if (fatherNode.person.marriagePlace) marriageText += ' in ' + fatherNode.person.marriagePlace;
+      marriageLabels.push(
+        <text key={`marriage-${ck}`} x={labelX} y={labelY} textAnchor="middle" fontSize={layout.textSize - 3} fill="#666" style={{ userSelect: 'none' }}>
+          {marriageText}
+        </text>
+      );
+    }
+
+    // ── Swap button ───────────────────────────────────────────────────────
+    if (onCoupleSwap) {
+      const isSwapped = (layout.swappedCouples || []).includes(ck);
+      const btnX = (getPixelX(fatherNode.x, fatherNode.width) + fatherNode.width + getPixelX(motherNode.x, motherNode.width)) / 2;
+      const btnY = parentBottomY - fatherNode.height / 2;
+      marriageLabels.push(
+        <g key={`swap-btn-${ck}`} onClick={(e) => { e.stopPropagation(); onCoupleSwap(ck); }} style={{ cursor: 'pointer' }}>
+          <title>Mann/Frau tauschen</title>
+          <rect x={btnX - 10} y={btnY - 9} width={20} height={18} rx={4} fill={isSwapped ? '#3b82f6' : '#e5e7eb'} stroke={isSwapped ? '#2563eb' : '#9ca3af'} strokeWidth={1}/>
+          <text x={btnX} y={btnY + 5} textAnchor="middle" fontSize={12} fill={isSwapped ? 'white' : '#374151'} style={{ userSelect: 'none', fontFamily: 'monospace' }}>⇄</text>
+        </g>
+      );
+    }
+
+    // ── Child connections ─────────────────────────────────────────────────
+    if (!isMultiChild) {
+      // Single child: original direct/bend behavior (no change from before)
+      const child = children[0];
+      const childCenterX = getPixelX(child.x, child.width) + child.width / 2;
+      const childTopY = getNodePixelY(child);
       const maxParentGen = Math.max(fatherNode.generation, motherNode.generation);
-      const genGap = maxParentGen - node.generation;
-      const dropDistance = 15;
+      const genGap = maxParentGen - child.generation;
       const standardMidY = (childTopY + parentBottomY) / 2;
-      const midY = genGap > 1 ? parentBottomY + dropDistance + 5 : standardMidY;
+      const midY = genGap > 1 ? dropY + 5 : standardMidY;
 
       if (layout.lineStyle === 'rounded') {
         const cornerRadius = 10;
-
-        const path1 = `M ${fatherCenterX} ${fatherBottomY} L ${fatherCenterX} ${parentBottomY} L ${motherCenterX} ${parentBottomY} L ${motherCenterX} ${motherBottomY}`;
-        // Approximate length: vertical father drop + horizontal span + vertical mother drop
-        addLineLength(fatherCenterX, fatherBottomY, fatherCenterX, parentBottomY);
-        addLineLength(fatherCenterX, parentBottomY, motherCenterX, parentBottomY);
-        addLineLength(motherCenterX, parentBottomY, motherCenterX, motherBottomY);
-
         const horizontalDist = Math.abs(childCenterX - parentsMidX);
         const useRounded = horizontalDist > cornerRadius * 2;
-
-        let path2;
+        let path2: string;
         if (useRounded && childCenterX > parentsMidX) {
           path2 = `M ${parentsMidX} ${parentBottomY} L ${parentsMidX} ${midY} Q ${parentsMidX} ${midY - cornerRadius}, ${parentsMidX + cornerRadius} ${midY - cornerRadius} L ${childCenterX - cornerRadius} ${midY - cornerRadius} Q ${childCenterX} ${midY - cornerRadius}, ${childCenterX} ${midY} L ${childCenterX} ${childTopY}`;
         } else if (useRounded && childCenterX < parentsMidX) {
@@ -568,174 +672,50 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
         } else {
           path2 = `M ${parentsMidX} ${parentBottomY} L ${parentsMidX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTopY}`;
         }
-        // Approximate path2 length
         addLineLength(parentsMidX, parentBottomY, parentsMidX, midY);
         addLineLength(parentsMidX, midY, childCenterX, midY);
         addLineLength(childCenterX, midY, childCenterX, childTopY);
-
-        lines.push(
-          <path
-            key={`parents-line-${node.person.id}`}
-            d={path1}
-            stroke={layout.borderColor}
-            strokeWidth={layout.lineWidth}
-            fill="none"
-          />
-        );
-
-        lines.push(
-          <path
-            key={`child-line-${node.person.id}`}
-            d={path2}
-            stroke={layout.borderColor}
-            strokeWidth={layout.lineWidth}
-            fill="none"
-          />
-        );
-       } else {
-        // Straight line style
-        // dropY is below the taller parent – both vertical lines extend all the way to dropY
-        // so there is no gap when parents have different heights.
-        const dropY = Math.max(fatherBottomY, motherBottomY) + dropDistance;
-
-        lines.push(
-          <line
-            key={`father-down-${node.person.id}`}
-            x1={fatherCenterX} y1={fatherBottomY}
-            x2={fatherCenterX} y2={dropY}
-            stroke={layout.borderColor} strokeWidth={layout.lineWidth}
-          />
-        );
-        addLineLength(fatherCenterX, fatherBottomY, fatherCenterX, dropY);
-
-        lines.push(
-          <line
-            key={`mother-down-${node.person.id}`}
-            x1={motherCenterX} y1={motherBottomY}
-            x2={motherCenterX} y2={dropY}
-            stroke={layout.borderColor} strokeWidth={layout.lineWidth}
-          />
-        );
-        addLineLength(motherCenterX, motherBottomY, motherCenterX, dropY);
-
-        lines.push(
-          <line
-            key={`parents-${node.person.id}`}
-            x1={fatherCenterX} y1={dropY}
-            x2={motherCenterX} y2={dropY}
-            stroke={layout.borderColor} strokeWidth={layout.lineWidth}
-          />
-        );
-        addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
-
-        lines.push(
-          <line
-            key={`parents-mid-${node.person.id}`}
-            x1={parentsMidX} y1={dropY}
-            x2={parentsMidX} y2={midY}
-            stroke={layout.borderColor} strokeWidth={layout.lineWidth}
-          />
-        );
+        lines.push(<path key={`child-line-${child.person.id}`} d={path2} stroke={layout.borderColor} strokeWidth={layout.lineWidth} fill="none"/>);
+      } else {
+        lines.push(<line key={`pm-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={midY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
         addLineLength(parentsMidX, dropY, parentsMidX, midY);
-
         if (Math.abs(childCenterX - parentsMidX) > 1) {
-          lines.push(
-            <line
-              key={`child-h-${node.person.id}`}
-              x1={parentsMidX} y1={midY}
-              x2={childCenterX} y2={midY}
-              stroke={layout.borderColor} strokeWidth={layout.lineWidth}
-            />
-          );
+          lines.push(<line key={`ch-${child.person.id}`} x1={parentsMidX} y1={midY} x2={childCenterX} y2={midY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
           addLineLength(parentsMidX, midY, childCenterX, midY);
         }
-
-        lines.push(
-          <line
-            key={`child-v-${node.person.id}`}
-            x1={childCenterX} y1={midY}
-            x2={childCenterX} y2={childTopY}
-            stroke={layout.borderColor} strokeWidth={layout.lineWidth}
-          />
-        );
+        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={midY} x2={childCenterX} y2={childTopY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
         addLineLength(childCenterX, midY, childCenterX, childTopY);
       }
+    } else {
+      // Multiple children: hub / spine pattern
+      //   Both parents drop straight to dropY → horizontal spine → vertical drops to each child
+      // Full horizontal spine (covers parent drop points + all children)
+      lines.push(<line key={`spine-${ck}`} x1={spineLeft} y1={dropY} x2={spineRight} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(spineLeft, dropY, spineRight, dropY);
+      // Vertical drop to each child's box top
+      sortedChildren.forEach(child => {
+        const childCenterX = getPixelX(child.x, child.width) + child.width / 2;
+        const childTopY = getNodePixelY(child);
+        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={dropY} x2={childCenterX} y2={childTopY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+        addLineLength(childCenterX, dropY, childCenterX, childTopY);
+      });
+    }
+    });
 
-      // Marriage info label + swap button
-      if (layout.showMarriageInfo && (fatherNode.person.marriageDate || fatherNode.person.marriagePlace)) {
-        const labelX = (fatherCenterX + motherCenterX) / 2;
-        const fatherBottomYLabel = getPixelYCached(fatherNode.generation) + fatherNode.height;
-        const motherBottomYLabel = getPixelYCached(motherNode.generation) + motherNode.height;
-        const parentBottomYLabel = Math.max(fatherBottomYLabel, motherBottomYLabel);
-        const labelY = parentBottomYLabel + layout.textSize + 2;
+    // ── Single-parent connections ─────────────────────────────────────────────
+    allNodes.forEach(node => {
+    const fatherNode = node.person.fatherId ? nodeMap.get(node.person.fatherId) : null;
+    const motherNode = node.person.motherId ? nodeMap.get(node.person.motherId) : null;
+    if (fatherNode && motherNode) return; // handled in couple loop above
 
-        let marriageText = 'oo';
-        if (fatherNode.person.marriageDate) {
-          marriageText += ' ' + formatDate(fatherNode.person.marriageDate, layout.dateFormat);
-        }
-        if (fatherNode.person.marriagePlace) {
-          marriageText += ' in ' + fatherNode.person.marriagePlace;
-        }
+    const parent = fatherNode ?? motherNode;
+    if (!parent) return;
 
-        marriageLabels.push(
-          <text
-            key={`marriage-${node.person.id}`}
-            x={labelX}
-            y={labelY}
-            textAnchor="middle"
-            fontSize={layout.textSize - 3}
-            fill="#666"
-            style={{ userSelect: 'none' }}
-          >
-            {marriageText}
-          </text>
-        );
-      }
+    const childCenterX = getPixelX(node.x, node.width) + node.width / 2;
+    const childTopY = getNodePixelY(node);
 
-      // Swap button (always shown for couples)
-      if (onCoupleSwap) {
-        const key = coupleKey(node.person.fatherId!, node.person.motherId!);
-        const fatherBottomYBtn = getPixelYCached(fatherNode.generation) + fatherNode.height;
-        const motherBottomYBtn = getPixelYCached(motherNode.generation) + motherNode.height;
-        const parentBottomYBtn = Math.max(fatherBottomYBtn, motherBottomYBtn);
-        const btnX = (getPixelX(fatherNode.x, fatherNode.width) + fatherNode.width + getPixelX(motherNode.x, motherNode.width)) / 2;
-        const btnY = parentBottomYBtn - fatherNode.height / 2;
-        const isSwapped = (layout.swappedCouples || []).includes(key);
-
-        marriageLabels.push(
-          <g
-            key={`swap-btn-${node.person.id}`}
-            onClick={(e) => { e.stopPropagation(); onCoupleSwap(key); }}
-            style={{ cursor: 'pointer' }}
-          >
-            <title>Mann/Frau tauschen</title>
-            <rect
-              x={btnX - 10}
-              y={btnY - 9}
-              width={20}
-              height={18}
-              rx={4}
-              fill={isSwapped ? '#3b82f6' : '#e5e7eb'}
-              stroke={isSwapped ? '#2563eb' : '#9ca3af'}
-              strokeWidth={1}
-            />
-            <text
-              x={btnX}
-              y={btnY + 5}
-              textAnchor="middle"
-              fontSize={12}
-              fill={isSwapped ? 'white' : '#374151'}
-              style={{ userSelect: 'none', fontFamily: 'monospace' }}
-            >
-              ⇄
-            </text>
-          </g>
-        );
-      }
-    } else if (fatherNode || motherNode) {
-      const parent = fatherNode || motherNode!;
-      const parentCenterX = getPixelX(parent.x, parent.width) + parent.width / 2;
-      const parentBottomY = getPixelYCached(parent.generation) + parent.height;
+    const parentCenterX = getPixelX(parent.x, parent.width) + parent.width / 2;
+    const parentBottomY = getNodePixelY(parent) + parent.height;
 
       if (layout.lineStyle === 'rounded') {
         const cornerRadius = 10;
@@ -775,7 +755,6 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
         );
         addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
       }
-    }
     });
 
     // Report stats + node layout via microtask
@@ -786,7 +765,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     if (onNodesLayout) {
       const pixelNodes: PixelNode[] = allNodes.map(node => ({
         x: getPixelX(node.x, node.width),
-        y: getPixelYCached(node.generation),
+        y: getNodePixelY(node),
         width: node.width,
         height: node.height,
         color: getPersonBoxColor(node),
@@ -809,7 +788,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
         {marriageLabels}
         {allNodes.map(node => {
           const x = getPixelX(node.x, node.width);
-          const y = getPixelYCached(node.generation);
+          const y = getNodePixelY(node);
           const boxColor = getPersonBoxColor(node);
 
           const ts = node.effectiveTextSize;
