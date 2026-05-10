@@ -44,14 +44,14 @@ const backgroundColors: Record<BackgroundSkin, string> = {
 };
 
 const subtreeColors = [
-  '#FFEBEE', // Light red
-  '#E3F2FD', // Light blue
-  '#F1F8E9', // Light green
-  '#FFF3E0', // Light orange
-  '#F3E5F5', // Light purple
-  '#E0F2F1', // Light teal
-  '#FFF9C4', // Light yellow
-  '#FCE4EC', // Light pink
+  '#B3E5FC', // Light blue
+  '#A5D6A7', // Light green
+  '#FFE082', // Light yellow
+  '#FFCC80', // Light orange
+  '#FFCCBC', // Light salmon
+  '#F8BBD0', // Light pink
+  '#E1BEE7', // Light purple
+  '#B2DFDB', // Light teal
 ];
 
 export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout, onPersonClick, onCoupleSwap, onStatsChange, onNodesLayout }: TreeCanvasProps) {
@@ -187,6 +187,10 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
       currentRoot = personId;
     }
 
+    // First path to reach this node wins: the father (left) side is always visited first,
+    // so the leftmost visible descendant determines the color.  Early-return also prevents
+    // infinite recursion in malformed data with cycles.
+    if (subtreeRoots.has(personId)) return;
     subtreeRoots.set(personId, currentRoot || 'root');
 
     const person = people.find(p => p.id === personId);
@@ -269,6 +273,57 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     bfsGen.forEach((_, id) => computeGen(id));
     // Root is always at generation 0
     computedGenerations.set(rootPersonId, 0);
+  }
+
+  // ── Phase 3.5: Sibling normalization ──────────────────────────────────────
+  // The longest-path algorithm may place siblings at different generations when
+  // they descend into different depths (Ahnenschwund).  This pass lifts all
+  // children of the same couple to the maximum sibling generation, then ensures
+  // every parent remains strictly above all its children.  Spouses of lifted
+  // persons are intentionally left at their original generation (longer lines).
+  {
+    // Build couple → children map (only when BOTH parents are in the tree)
+    const coupleChildrenForNorm = new Map<string, string[]>();
+    bfsGen.forEach((_, id) => {
+      const p = people.find(q => q.id === id);
+      if (!p || !p.fatherId || !p.motherId) return;
+      if (!computedGenerations.has(p.fatherId) || !computedGenerations.has(p.motherId)) return;
+      const ck = [p.fatherId, p.motherId].sort().join('_');
+      if (!coupleChildrenForNorm.has(ck)) coupleChildrenForNorm.set(ck, []);
+      coupleChildrenForNorm.get(ck)!.push(id);
+    });
+
+    let stable = false;
+    while (!stable) {
+      stable = true;
+
+      // Step 1: lift all children of a couple to the maximum sibling generation
+      coupleChildrenForNorm.forEach((childIds) => {
+        const valid = childIds.filter(id => computedGenerations.has(id));
+        if (valid.length <= 1) return;
+        const maxGen = Math.max(...valid.map(id => computedGenerations.get(id)!));
+        valid.forEach(id => {
+          if ((computedGenerations.get(id) ?? 0) < maxGen) {
+            computedGenerations.set(id, maxGen);
+            stable = false;
+          }
+        });
+      });
+
+      // Step 2: ensure every parent is strictly above all its (possibly lifted) children
+      bfsGen.forEach((_, id) => {
+        if (id === rootPersonId) return; // root is always pinned at 0
+        const children = treeChildren.get(id) ?? [];
+        const inTree = children.filter(cid => computedGenerations.has(cid));
+        if (inTree.length === 0) return;
+        const maxChildGen = Math.max(...inTree.map(cid => computedGenerations.get(cid)!));
+        const needed = maxChildGen + 1;
+        if ((computedGenerations.get(id) ?? 0) < needed) {
+          computedGenerations.set(id, needed);
+          stable = false;
+        }
+      });
+    }
   }
 
   // Build tree and calculate subtree widths (bottom-up)
@@ -399,6 +454,13 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     genHeights.set(gen, maxHeight);
   });
 
+  // Normalize every node's height to the generation maximum so that all boxes
+  // in a row are equally tall.  All downstream code (line endpoints, canvas
+  // height, minimap) automatically uses the correct uniform height.
+  allNodes.forEach(node => {
+    node.height = genHeights.get(node.generation) ?? node.height;
+  });
+
   // maxGeneration is kept for reference but genPixelYs now uses sortedGens (occupied gens only)
   const _maxGeneration = Math.max(...allNodes.map(n => n.generation)); void _maxGeneration;
 
@@ -526,18 +588,27 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     if ((layout.colorScheme === 'by-grandparent' || layout.colorScheme === 'by-great-grandparent') && node.generation <= 2) {
       const targetRoots = layout.colorScheme === 'by-great-grandparent' ? greatGrandparents : grandparents;
       if (targetRoots.length > 0) {
-        let cur: Person | undefined = node.person;
-        while (cur && cur.fatherId) {
-          const father = people.find(p => p.id === cur!.fatherId);
-          if (!father) break;
-          const idx = targetRoots.indexOf(father.id);
-          if (idx !== -1) {
-            return subtreeColors[idx % subtreeColors.length];
+        // DFS over all ancestors (father first for left-to-right priority) looking for the
+        // first targetRoot.  This handles illegitimate children who have no father but whose
+        // mother's line leads to a great-grandparent.
+        const findTargetRoot = (personId: string, seen: Set<string>): number => {
+          if (seen.has(personId)) return -1;
+          seen.add(personId);
+          const p = people.find(q => q.id === personId);
+          if (!p) return -1;
+          for (const parentId of [p.fatherId, p.motherId]) {
+            if (!parentId) continue;
+            const idx = targetRoots.indexOf(parentId);
+            if (idx !== -1) return idx;
+            const deeper = findTargetRoot(parentId, seen);
+            if (deeper !== -1) return deeper;
           }
-          cur = father;
-        }
+          return -1;
+        };
+        const idx = findTargetRoot(node.person.id, new Set());
+        if (idx !== -1) return subtreeColors[idx % subtreeColors.length];
       }
-      // Fall through to normal behaviour if no paternal ancestor match.
+      // Fall through to normal behaviour if no ancestor match.
     }
 
     if (rootId === 'root') {
@@ -552,6 +623,45 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
 
     return subtreeColors[index % subtreeColors.length];
   };
+
+    // ── Line-color helper ─────────────────────────────────────────────────────
+    // When layout.colorLines is enabled, lines are stroked in the child node's
+    // subtree color instead of the uniform borderColor.
+    const getLineColor = (childNode: TreeNode): string => {
+      if (!layout.colorLines || layout.colorScheme === 'uniform') return layout.borderColor;
+      const boxColor = getPersonBoxColor(childNode);
+      return boxColor === 'white' ? layout.borderColor : boxColor;
+    };
+
+    // ── Rounded-corner path helper ────────────────────────────────────────────
+    // Takes an ordered list of orthogonal waypoints and returns an SVG path string
+    // where every interior 90° corner is replaced by a quadratic Bézier curve of
+    // radius `r`.  T-intersections are never passed as interior waypoints so they
+    // are naturally left as sharp intersections.
+    const cornerR = 10;
+    const buildRoundedPath = (pts: Array<[number, number]>, r: number): string => {
+      if (pts.length < 2) return '';
+      let d = `M ${pts[0][0]} ${pts[0][1]}`;
+      for (let i = 1; i < pts.length - 1; i++) {
+        const [x0, y0] = pts[i - 1];
+        const [x1, y1] = pts[i];
+        const [x2, y2] = pts[i + 1];
+        const len1 = Math.hypot(x1 - x0, y1 - y0);
+        const len2 = Math.hypot(x2 - x1, y2 - y1);
+        const rad = Math.min(r, len1 / 2, len2 / 2);
+        if (rad < 0.5) {
+          d += ` L ${x1} ${y1}`;
+        } else {
+          const bx = x1 - (x1 - x0) / len1 * rad;
+          const by = y1 - (y1 - y0) / len1 * rad;
+          const ax = x1 + (x2 - x1) / len2 * rad;
+          const ay = y1 + (y2 - y1) / len2 * rad;
+          d += ` L ${bx} ${by} Q ${x1} ${y1} ${ax} ${ay}`;
+        }
+      }
+      d += ` L ${pts[pts.length - 1][0]} ${pts[pts.length - 1][1]}`;
+      return d;
+    };
 
     // Generate connection lines and marriage labels
     const lines: ReactElement[] = [];
@@ -577,6 +687,63 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
       }
     });
 
+    // ── Compute stagger offsets for overlapping multi-child spines ───────────
+    // Couples whose child-spine X ranges overlap and share the same parentBottomY
+    // would render their horizontal spine line at identical Y coordinates.
+    // Greedy interval-graph colouring assigns each such couple a stagger level so
+    // that no two overlapping spines share the same Y.
+    const SPINE_STAGGER_PX = 8;
+    const coupleSpineStagger = new Map<string, number>(); // ck → stagger level
+    {
+      const DROP_DIST = 15; // must match `dropDistance` below
+      const entries: Array<{ ck: string; spineLeft: number; spineRight: number; parentBottomY: number }> = [];
+      coupleToChildren.forEach(({ fn: fatherNode, mn: motherNode, children }, ck) => {
+        if (children.length <= 1) return;
+        const fatherCenterX = getPixelX(fatherNode.x, fatherNode.width) + fatherNode.width / 2;
+        const motherCenterX = getPixelX(motherNode.x, motherNode.width) + motherNode.width / 2;
+        const parentsMidX   = (fatherCenterX + motherCenterX) / 2;
+        const parentBottomY = Math.max(
+          getNodePixelY(fatherNode) + fatherNode.height,
+          getNodePixelY(motherNode) + motherNode.height,
+        );
+        const dropY       = parentBottomY + DROP_DIST;
+        void dropY; // only parentBottomY is used for grouping
+        const childXs     = children.map(c => getPixelX(c.x, c.width) + c.width / 2);
+        const spineLeft   = Math.min(parentsMidX, ...childXs);
+        const spineRight  = Math.max(parentsMidX, ...childXs);
+        entries.push({ ck, spineLeft, spineRight, parentBottomY });
+      });
+
+      // Group by parentBottomY (same generation row → same base dropY)
+      const byParentY = new Map<number, typeof entries>();
+      entries.forEach(e => {
+        if (!byParentY.has(e.parentBottomY)) byParentY.set(e.parentBottomY, []);
+        byParentY.get(e.parentBottomY)!.push(e);
+      });
+
+      // Greedy interval colouring: assign the smallest level at which this
+      // interval does not overlap any already-placed interval at that level.
+      byParentY.forEach(group => {
+        const sorted = [...group].sort((a, b) => a.spineLeft - b.spineLeft);
+        const levelMaxRight: number[] = []; // rightmost spineRight per level
+        sorted.forEach(entry => {
+          let placed = false;
+          for (let i = 0; i < levelMaxRight.length; i++) {
+            if (entry.spineLeft >= levelMaxRight[i]) {
+              coupleSpineStagger.set(entry.ck, i);
+              levelMaxRight[i] = entry.spineRight;
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            coupleSpineStagger.set(entry.ck, levelMaxRight.length);
+            levelMaxRight.push(entry.spineRight);
+          }
+        });
+      });
+    }
+
     // ── Two-parent family connections ─────────────────────────────────────────
     coupleToChildren.forEach(({ fn: fatherNode, mn: motherNode, children }, ck) => {
     const fatherCenterX = getPixelX(fatherNode.x, fatherNode.width) + fatherNode.width / 2;
@@ -598,25 +765,31 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     const _spineLeft  = isMultiChild ? Math.min(Math.min(...childXs), Math.min(fatherCenterX, motherCenterX)) : parentsMidX; void _spineLeft;
     const _spineRight = isMultiChild ? Math.max(Math.max(...childXs), Math.max(fatherCenterX, motherCenterX)) : parentsMidX; void _spineRight;
 
+    // Line color for this couple: derived from the leftmost child's subtree (or borderColor if uniform)
+    const coupleLineColor = getLineColor(sortedChildren[0]);
+
     // ── Parent bar (drawn once per couple) ─────────────────────────────────
-    if (layout.lineStyle === 'rounded' && !isMultiChild) {
-      // Rounded single-child: U-shape connecting both parents at parentBottomY
-      const path1 = `M ${fatherCenterX} ${fatherBottomY} L ${fatherCenterX} ${parentBottomY} L ${motherCenterX} ${parentBottomY} L ${motherCenterX} ${motherBottomY}`;
-      addLineLength(fatherCenterX, fatherBottomY, fatherCenterX, parentBottomY);
-      addLineLength(fatherCenterX, parentBottomY, motherCenterX, parentBottomY);
-      addLineLength(motherCenterX, parentBottomY, motherCenterX, motherBottomY);
-      lines.push(<path key={`parents-bar-${ck}`} d={path1} stroke={layout.borderColor} strokeWidth={layout.lineWidth} fill="none"/>);
-    } else {
-      // Straight style OR rounded multi-child: both parents drop straight to dropY.
-      // For rounded multi-child we use straight drops so that each drop endpoint
-      // lands exactly on the spine at dropY – no dangling line segments.
-      lines.push(<line key={`fd-${ck}`} x1={fatherCenterX} y1={fatherBottomY} x2={fatherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+    if (layout.lineStyle === 'rounded') {
+      // Rounded: each parent drops with a curved corner into its half of the bar.
+      // Father path: down → rounded corner → across to parentsMidX (left half of bar)
+      const fPts: Array<[number, number]> = [[fatherCenterX, fatherBottomY], [fatherCenterX, dropY], [parentsMidX, dropY]];
+      lines.push(<path key={`fd-${ck}`} d={buildRoundedPath(fPts, cornerR)} stroke={coupleLineColor} strokeWidth={layout.lineWidth} fill="none"/>);
       addLineLength(fatherCenterX, fatherBottomY, fatherCenterX, dropY);
-      lines.push(<line key={`md-${ck}`} x1={motherCenterX} y1={motherBottomY} x2={motherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(fatherCenterX, dropY, parentsMidX, dropY);
+      // Mother path: down → rounded corner → across to parentsMidX (right half of bar)
+      const mPts: Array<[number, number]> = [[motherCenterX, motherBottomY], [motherCenterX, dropY], [parentsMidX, dropY]];
+      lines.push(<path key={`md-${ck}`} d={buildRoundedPath(mPts, cornerR)} stroke={coupleLineColor} strokeWidth={layout.lineWidth} fill="none"/>);
+      addLineLength(motherCenterX, motherBottomY, motherCenterX, dropY);
+      addLineLength(motherCenterX, dropY, parentsMidX, dropY);
+    } else {
+      // Straight: individual line segments
+      lines.push(<line key={`fd-${ck}`} x1={fatherCenterX} y1={fatherBottomY} x2={fatherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+      addLineLength(fatherCenterX, fatherBottomY, fatherCenterX, dropY);
+      lines.push(<line key={`md-${ck}`} x1={motherCenterX} y1={motherBottomY} x2={motherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
       addLineLength(motherCenterX, motherBottomY, motherCenterX, dropY);
       if (!isMultiChild) {
         // Single child (straight): f-to-m horizontal at dropY; spine handles it for multi-child
-        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
         addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
       }
     }
@@ -651,7 +824,6 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
 
     // ── Child connections ─────────────────────────────────────────────────
     if (!isMultiChild) {
-      // Single child: original direct/bend behavior (no change from before)
       const child = children[0];
       const childCenterX = getPixelX(child.x, child.width) + child.width / 2;
       const childTopY = getNodePixelY(child);
@@ -661,55 +833,60 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
       const midY = genGap > 1 ? dropY + 5 : standardMidY;
 
       if (layout.lineStyle === 'rounded') {
-        const cornerRadius = 10;
-        const horizontalDist = Math.abs(childCenterX - parentsMidX);
-        const useRounded = horizontalDist > cornerRadius * 2;
-        let path2: string;
-        if (useRounded && childCenterX > parentsMidX) {
-          path2 = `M ${parentsMidX} ${parentBottomY} L ${parentsMidX} ${midY} Q ${parentsMidX} ${midY - cornerRadius}, ${parentsMidX + cornerRadius} ${midY - cornerRadius} L ${childCenterX - cornerRadius} ${midY - cornerRadius} Q ${childCenterX} ${midY - cornerRadius}, ${childCenterX} ${midY} L ${childCenterX} ${childTopY}`;
-        } else if (useRounded && childCenterX < parentsMidX) {
-          path2 = `M ${parentsMidX} ${parentBottomY} L ${parentsMidX} ${midY} Q ${parentsMidX} ${midY - cornerRadius}, ${parentsMidX - cornerRadius} ${midY - cornerRadius} L ${childCenterX + cornerRadius} ${midY - cornerRadius} Q ${childCenterX} ${midY - cornerRadius}, ${childCenterX} ${midY} L ${childCenterX} ${childTopY}`;
+        if (Math.abs(childCenterX - parentsMidX) < 1) {
+          // Vertically aligned: straight drop, no corners
+          lines.push(<line key={`cv-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+          addLineLength(parentsMidX, dropY, childCenterX, childTopY);
         } else {
-          path2 = `M ${parentsMidX} ${parentBottomY} L ${parentsMidX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTopY}`;
+          // Stem down → rounded corner → across → rounded corner → up to child
+          const pts: Array<[number, number]> = [
+            [parentsMidX, dropY],
+            [parentsMidX, midY],
+            [childCenterX, midY],
+            [childCenterX, childTopY],
+          ];
+          lines.push(<path key={`child-line-${child.person.id}`} d={buildRoundedPath(pts, cornerR)} stroke={coupleLineColor} strokeWidth={layout.lineWidth} fill="none"/>);
+          addLineLength(parentsMidX, dropY, parentsMidX, midY);
+          addLineLength(parentsMidX, midY, childCenterX, midY);
+          addLineLength(childCenterX, midY, childCenterX, childTopY);
         }
-        addLineLength(parentsMidX, parentBottomY, parentsMidX, midY);
-        addLineLength(parentsMidX, midY, childCenterX, midY);
-        addLineLength(childCenterX, midY, childCenterX, childTopY);
-        lines.push(<path key={`child-line-${child.person.id}`} d={path2} stroke={layout.borderColor} strokeWidth={layout.lineWidth} fill="none"/>);
       } else {
-        lines.push(<line key={`pm-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={midY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`pm-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={midY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
         addLineLength(parentsMidX, dropY, parentsMidX, midY);
         if (Math.abs(childCenterX - parentsMidX) > 1) {
-          lines.push(<line key={`ch-${child.person.id}`} x1={parentsMidX} y1={midY} x2={childCenterX} y2={midY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`ch-${child.person.id}`} x1={parentsMidX} y1={midY} x2={childCenterX} y2={midY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
           addLineLength(parentsMidX, midY, childCenterX, midY);
         }
-        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={midY} x2={childCenterX} y2={childTopY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={midY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
         addLineLength(childCenterX, midY, childCenterX, childTopY);
       }
     } else {
       // Multiple children: two-level pattern
       //   Both parents drop to dropY → horizontal parent bar at dropY →
       //   stem from midpoint down to childSpineY → horizontal child spine → vertical drops to children
-      //   This separates the couple-bar from the child-distribution bar and avoids
-      //   the overlap that occurs when a child column sits directly below one of the parents.
-      const childSpineY = dropY + dropDistance;
+      //   The rounded parent bar is already drawn via the fd/md half-paths above.
+      //   Stem, spine, and child drops are T-intersections → no rounding needed.
+      const staggerLevel = coupleSpineStagger.get(ck) ?? 0;
+      const childSpineY = dropY + dropDistance + staggerLevel * SPINE_STAGGER_PX;
       const childSpineLeft  = Math.min(parentsMidX, ...childXs);
       const childSpineRight = Math.max(parentsMidX, ...childXs);
 
-      // Horizontal parent bar at dropY (joins both parent drop lines)
-      lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
-      addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
-      // Stem from parent midpoint down to child spine
-      lines.push(<line key={`stem-${ck}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={childSpineY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      if (layout.lineStyle !== 'rounded') {
+        // Straight: explicit parent bar at dropY (for rounded it is covered by the fd/md half-paths)
+        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+        addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
+      }
+      // Stem from parent midpoint down to child spine (T-intersection at both ends)
+      lines.push(<line key={`stem-${ck}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={childSpineY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
       addLineLength(parentsMidX, dropY, parentsMidX, childSpineY);
-      // Horizontal child spine
-      lines.push(<line key={`spine-${ck}`} x1={childSpineLeft} y1={childSpineY} x2={childSpineRight} y2={childSpineY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+      // Horizontal child spine (T-intersections with stem above and child drops below)
+      lines.push(<line key={`spine-${ck}`} x1={childSpineLeft} y1={childSpineY} x2={childSpineRight} y2={childSpineY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
       addLineLength(childSpineLeft, childSpineY, childSpineRight, childSpineY);
-      // Vertical drop to each child's box top
+      // Vertical drop to each child's box top – all use the couple's line color
       sortedChildren.forEach(child => {
         const childCenterX = getPixelX(child.x, child.width) + child.width / 2;
         const childTopY = getNodePixelY(child);
-        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={childSpineY} x2={childCenterX} y2={childTopY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={childSpineY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
         addLineLength(childCenterX, childSpineY, childCenterX, childTopY);
       });
     }
@@ -731,32 +908,27 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     const parentBottomY = getNodePixelY(parent) + parent.height;
 
       if (layout.lineStyle === 'rounded') {
-        const cornerRadius = 10;
-        const horizontalDist = Math.abs(childCenterX - parentCenterX);
-        const verticalDist = childTopY - parentBottomY;
-        const useRounded = horizontalDist > cornerRadius * 2 && verticalDist > cornerRadius * 2;
-
-        let path;
-        if (useRounded && childCenterX > parentCenterX) {
-          const midY = (childTopY + parentBottomY) / 2;
-          path = `M ${parentCenterX} ${parentBottomY} L ${parentCenterX} ${midY - cornerRadius} Q ${parentCenterX} ${midY}, ${parentCenterX + cornerRadius} ${midY} L ${childCenterX - cornerRadius} ${midY} Q ${childCenterX} ${midY}, ${childCenterX} ${midY + cornerRadius} L ${childCenterX} ${childTopY}`;
-        } else if (useRounded && childCenterX < parentCenterX) {
-          const midY = (childTopY + parentBottomY) / 2;
-          path = `M ${parentCenterX} ${parentBottomY} L ${parentCenterX} ${midY - cornerRadius} Q ${parentCenterX} ${midY}, ${parentCenterX - cornerRadius} ${midY} L ${childCenterX + cornerRadius} ${midY} Q ${childCenterX} ${midY}, ${childCenterX} ${midY + cornerRadius} L ${childCenterX} ${childTopY}`;
+        if (Math.abs(childCenterX - parentCenterX) < 1) {
+          // Vertically aligned: straight line, no corners
+          lines.push(
+            <line key={`single-parent-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={childCenterX} y2={childTopY} stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>
+          );
+          addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
         } else {
-          path = `M ${parentCenterX} ${parentBottomY} L ${childCenterX} ${childTopY}`;
+          const midY = Math.round((parentBottomY + childTopY) / 2);
+          const pts: Array<[number, number]> = [
+            [parentCenterX, parentBottomY],
+            [parentCenterX, midY],
+            [childCenterX, midY],
+            [childCenterX, childTopY],
+          ];
+          lines.push(
+            <path key={`single-parent-${node.person.id}`} d={buildRoundedPath(pts, cornerR)} stroke={getLineColor(node)} strokeWidth={layout.lineWidth} fill="none"/>
+          );
+          addLineLength(parentCenterX, parentBottomY, parentCenterX, midY);
+          addLineLength(parentCenterX, midY, childCenterX, midY);
+          addLineLength(childCenterX, midY, childCenterX, childTopY);
         }
-        addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
-
-        lines.push(
-          <path
-            key={`single-parent-${node.person.id}`}
-            d={path}
-            stroke={layout.borderColor}
-            strokeWidth={layout.lineWidth}
-            fill="none"
-          />
-        );
       } else {
         // Straight style: use orthogonal connector (down → across → down)
         // to avoid long diagonal lines when parent and child are far apart horizontally.
@@ -767,15 +939,15 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
               key={`single-parent-${node.person.id}`}
               x1={parentCenterX} y1={parentBottomY}
               x2={childCenterX} y2={childTopY}
-              stroke={layout.borderColor} strokeWidth={layout.lineWidth}
+              stroke={getLineColor(node)} strokeWidth={layout.lineWidth}
             />
           );
           addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
         } else {
           const midY = Math.round((parentBottomY + childTopY) / 2);
-          lines.push(<line key={`sp-v1-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={parentCenterX} y2={midY} stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
-          lines.push(<line key={`sp-h-${node.person.id}`}  x1={parentCenterX} y1={midY}          x2={childCenterX}  y2={midY}          stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
-          lines.push(<line key={`sp-v2-${node.person.id}`} x1={childCenterX}  y1={midY}          x2={childCenterX}  y2={childTopY}     stroke={layout.borderColor} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`sp-v1-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={parentCenterX} y2={midY} stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`sp-h-${node.person.id}`}  x1={parentCenterX} y1={midY}          x2={childCenterX}  y2={midY}          stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`sp-v2-${node.person.id}`} x1={childCenterX}  y1={midY}          x2={childCenterX}  y2={childTopY}     stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>);
           addLineLength(parentCenterX, parentBottomY, parentCenterX, midY);
           addLineLength(parentCenterX, midY, childCenterX, midY);
           addLineLength(childCenterX, midY, childCenterX, childTopY);
@@ -816,6 +988,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
           const x = getPixelX(node.x, node.width);
           const y = getNodePixelY(node);
           const boxColor = getPersonBoxColor(node);
+
 
           const ts = node.effectiveTextSize;
           const pd = node.effectivePadding;

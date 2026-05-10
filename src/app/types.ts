@@ -18,6 +18,7 @@ export type BackgroundSkin = 'white' | 'cream' | 'light-blue' | 'light-green';
 export type ColorScheme = 'uniform' | 'by-grandparent' | 'by-great-grandparent';
 export type DateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD MMM YYYY';
 export type LineStyle = 'straight' | 'rounded';
+export type LineColorMode = 'border' | 'subtree';
 
 export interface LayoutSettings {
   textSize: number;
@@ -41,6 +42,7 @@ export interface LayoutSettings {
   maxGenerations: number | null; // null means show all generations
   dateFormat: DateFormat;
   lineStyle: LineStyle;
+  colorLines: boolean;    // Color connecting lines with the child node's subtree color
   swappedCouples: string[]; // Array of coupleKeys ("id1_id2" sorted) where mother is left, father right
   birthYearSpread: number;  // Max vertical offset in px between earliest/latest born within one generation row (0 = off)
   minBoxWidth: number;       // Minimum person-box width in px (at scale 1.0); 0 = pure content width
@@ -87,6 +89,7 @@ export const defaultLayoutSettings: LayoutSettings = {
   maxGenerations: 5, // Show all generations by default
   dateFormat: 'DD.MM.YYYY',
   lineStyle: 'straight',
+  colorLines: false,
   swappedCouples: [],
   birthYearSpread: 0,
   minBoxWidth: 50,

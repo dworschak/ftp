@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FamilyTree, Person } from '../types';
+import { FamilyTree, Person, defaultLayoutSettings } from '../types';
 import { TreeCanvas } from './TreeCanvas';
 import { PersonForm } from './PersonForm';
 import { LayoutSettings } from './LayoutSettings';
@@ -19,6 +19,8 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
   const [isAddingPerson, setIsAddingPerson] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [treeName, setTreeName] = useState(tree.name);
+  const [rootPersonId, setRootPersonId] = useState(tree.people[0]?.id || '');
+  const [layout, setLayout] = useState(defaultLayoutSettings);
 
   const handleAddPerson = (person: Omit<Person, 'id'>) => {
     const newPerson: Person = {
@@ -29,12 +31,13 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
     const updatedTree = {
       ...tree,
       people: [...tree.people, newPerson],
-      rootPersonId: tree.rootPersonId || newPerson.id,
       updatedAt: new Date().toISOString(),
     };
 
     onUpdateTree(updatedTree);
     setIsAddingPerson(false);
+    // Set first person as root if no root exists
+    if (!rootPersonId) setRootPersonId(newPerson.id);
   };
 
   const handleUpdatePerson = (person: Person) => {
@@ -54,28 +57,23 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
     const updatedTree = {
       ...tree,
       people: tree.people.filter(p => p.id !== personId),
-      rootPersonId: tree.rootPersonId === personId ? '' : tree.rootPersonId,
       updatedAt: new Date().toISOString(),
     };
 
     onUpdateTree(updatedTree);
     setEditingPerson(null);
+    // Reset root if deleted person was root
+    if (rootPersonId === personId) {
+      setRootPersonId(updatedTree.people[0]?.id || '');
+    }
   };
 
-  const handleUpdateLayout = (layout: typeof tree.layout) => {
-    onUpdateTree({
-      ...tree,
-      layout,
-      updatedAt: new Date().toISOString(),
-    });
+  const handleUpdateLayout = (newLayout: typeof defaultLayoutSettings) => {
+    setLayout(newLayout);
   };
 
   const handleSetRootPerson = (personId: string) => {
-    onUpdateTree({
-      ...tree,
-      rootPersonId: personId,
-      updatedAt: new Date().toISOString(),
-    });
+    setRootPersonId(personId);
   };
 
   const handleSaveTreeName = () => {
@@ -204,7 +202,11 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
                     <PersonForm
                       person={editingPerson}
                       people={tree.people}
-                      onSave={handleUpdatePerson}
+                      onSave={(updated) => {
+                        if ('id' in updated) {
+                          handleUpdatePerson(updated as Person);
+                        }
+                      }}
                       onCancel={() => setEditingPerson(null)}
                       onDelete={() => handleDeletePerson(editingPerson.id)}
                     />
@@ -217,7 +219,7 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
                       key={person.id}
                       onClick={() => setEditingPerson(person)}
                       className={`p-3 rounded-lg border cursor-pointer hover:border-foreground/20 ${
-                        person.id === tree.rootPersonId
+                        person.id === rootPersonId
                           ? 'border-primary bg-primary/5'
                           : 'border-border'
                       }`}
@@ -233,13 +235,13 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
                             </p>
                           )}
                         </div>
-                        {person.id === tree.rootPersonId && (
+                        {person.id === rootPersonId && (
                           <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
                             Root
                           </span>
                         )}
                       </div>
-                      {person.id !== tree.rootPersonId && (
+                      {person.id !== rootPersonId && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -260,7 +262,7 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
               <div className="p-4">
                 <h3 className="mb-4">Print Layout</h3>
                 <LayoutSettings
-                  layout={tree.layout}
+                  layout={layout}
                   onUpdate={handleUpdateLayout}
                 />
               </div>
@@ -285,10 +287,21 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
 
         {/* Main Canvas */}
         <div className="flex-1 overflow-auto bg-muted/30 print:overflow-visible print:bg-white">
-          <TreeCanvas
-            tree={tree}
-            onSelectPerson={(person) => setEditingPerson(person)}
-          />
+          {rootPersonId ? (
+            <TreeCanvas
+              people={tree.people}
+              rootPersonId={rootPersonId}
+              graphType="ancestor"
+              layout={layout}
+              onPersonClick={(person) => setEditingPerson(person)}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <p className="mb-2">Add a person to get started</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

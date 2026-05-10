@@ -157,6 +157,15 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
             />
             <span className="text-sm">Show marriage info on lines</span>
           </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={layout.colorLines}
+              onChange={(e) => handleChange('colorLines', e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm">Linien in Teilbaum-Farbe</span>
+          </label>
         </div>
       </div>
 
