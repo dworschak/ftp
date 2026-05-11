@@ -2,6 +2,15 @@
 @import './tailwind.css';
 @import './theme.css';
 
+/* Hide native scrollbar when the bottom minimap acts as the scrollbar */
+.mmbar-scroll-hide {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge legacy */
+}
+.mmbar-scroll-hide::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / Chromium */
+}
+
 /* Print styles for family tree */
 @media print {
   @page {

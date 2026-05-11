@@ -34,8 +34,12 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
   const [zoom, setZoom] = useState(1);
   const [canvasStats, setCanvasStats] = useState<{ widthPx: number; heightPx: number; lineLengthPx: number } | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<PixelNode[]>([]);
-  const [showMiniMap, setShowMiniMap] = useState(false);
+  const [showMiniMap, setShowMiniMap] = useState(true);
   const [scrollPos, setScrollPos] = useState({ left: 0, top: 0 });
+  // Viewport dimensions of the scroll container (kept in state so the minimap
+  // receives accurate values even after the settings panel is toggled or the
+  // browser window is resized).
+  const [viewportDims, setViewportDims] = useState({ width: 0, height: 0, left: 0 });
   const statsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Stores the world-space anchor point set by a wheel zoom, consumed by a
    *  useEffect after the new zoom is rendered so the point under the cursor
@@ -119,6 +123,24 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
       scrollContainer.removeEventListener('scroll', handleScroll);
       scrollContainer.removeEventListener('wheel', handleWheelNative);
     };
+  }, []);
+
+  // Track scroll-container viewport dimensions so the minimap indicator is accurate
+  // even when the settings panel is toggled or the browser window is resized.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setViewportDims({
+        width:  entry.contentRect.width,
+        height: entry.contentRect.height,
+        // Distance from the left viewport edge to the start of the canvas pane.
+        // Used to keep the minimap from overlapping the settings sidebar.
+        left: el.getBoundingClientRect().left,
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const handleMiniMapNavigate = (scrollLeft: number, scrollTop: number) => {
@@ -352,68 +374,73 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
           </div>
         )}
 
-        {/* Canvas Area */}
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-auto bg-muted/20 relative"
-          onMouseDown={handleCanvasMouseDown}
-          style={{ cursor: isDraggingState ? 'grabbing' : 'grab', userSelect: 'none' }}
-        >
-          {rootPersonId ? (
-            /* Sizer div: tells the scroll container exactly how much space the
-               zoomed canvas occupies so there is no phantom whitespace.
-               canvasStats.widthPx / heightPx is the SVG size; +64 accounts for
-               the p-8 (32 px each side) padding inside TreeCanvas. */
-            <div
-              style={{
-                width:     canvasStats ? `${Math.ceil((canvasStats.widthPx  + 64) * zoom)}px` : '100%',
-                minWidth:  '100%',
-                height:    canvasStats ? `${Math.ceil((canvasStats.heightPx + 64) * zoom)}px` : undefined,
-                minHeight: '100%',
-              }}
-            >
+        {/* Canvas Area: flex column — scroll pane on top, minimap bar on bottom */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div
+            ref={scrollRef}
+            className={`flex-1 overflow-auto bg-muted/20 relative${showMiniMap ? ' mmbar-scroll-hide' : ''}`}
+            onMouseDown={handleCanvasMouseDown}
+            style={{ cursor: isDraggingState ? 'grabbing' : 'grab', userSelect: 'none' }}
+          >
+            {rootPersonId ? (
+              /* Sizer div: tells the scroll container exactly how much space the
+                 zoomed canvas occupies so there is no phantom whitespace.
+                 canvasStats.widthPx / heightPx is the SVG size; +64 accounts for
+                 the p-8 (32 px each side) padding inside TreeCanvas. */
               <div
                 style={{
-                  transform:       `scale(${zoom})`,
-                  transformOrigin: 'top left',
+                  width:     canvasStats ? `${Math.ceil((canvasStats.widthPx  + 64) * zoom)}px` : '100%',
+                  minWidth:  '100%',
+                  height:    canvasStats ? `${Math.ceil((canvasStats.heightPx + 64) * zoom)}px` : undefined,
+                  minHeight: '100%',
                 }}
               >
-                <TreeCanvas
-                  people={tree.people}
-                  rootPersonId={rootPersonId}
-                  graphType={graphType}
-                  layout={layout}
-                  onPersonClick={handlePersonClick}
-                  onCoupleSwap={handleCoupleSwap}
-                  onStatsChange={handleStatsChange}
-                  onNodesLayout={handleNodesLayout}
-                />
+                <div
+                  style={{
+                    transform:       `scale(${zoom})`,
+                    transformOrigin: 'top left',
+                  }}
+                >
+                  <TreeCanvas
+                    people={tree.people}
+                    rootPersonId={rootPersonId}
+                    graphType={graphType}
+                    layout={layout}
+                    onPersonClick={handlePersonClick}
+                    onCoupleSwap={handleCoupleSwap}
+                    onStatsChange={handleStatsChange}
+                    onNodesLayout={handleNodesLayout}
+                  />
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              <div className="text-center">
-                <p className="mb-2">No root person selected</p>
-                <p className="text-sm">Search for a person to begin</p>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                <div className="text-center">
+                  <p className="mb-2">No root person selected</p>
+                  <p className="text-sm">Search for a person to begin</p>
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+
+          {/* Minimap sits below the scroll pane inside the canvas column —
+              it naturally occupies only the canvas pane width and never
+              overlaps the settings sidebar. */}
+          {showMiniMap && layoutNodes.length > 0 && canvasStats && (
+            <TreeMiniMap
+              nodes={layoutNodes}
+              treeWidth={canvasStats.widthPx}
+              treeHeight={canvasStats.heightPx}
+              viewportWidth={viewportDims.width  || (scrollRef.current?.clientWidth  ?? 800)}
+              viewportHeight={viewportDims.height || (scrollRef.current?.clientHeight ?? 600)}
+              scrollLeft={scrollPos.left}
+              scrollTop={scrollPos.top}
+              zoom={zoom}
+              onNavigate={handleMiniMapNavigate}
+            />
           )}
         </div>
       </div>
-
-      {/* Minimap – shows actual person boxes, visible as soon as nodes are laid out */}
-      {showMiniMap && layoutNodes.length > 0 && scrollRef.current && (
-        <TreeMiniMap
-          nodes={layoutNodes}
-          containerWidth={scrollRef.current.clientWidth}
-          containerHeight={scrollRef.current.clientHeight}
-          scrollLeft={scrollPos.left}
-          scrollTop={scrollPos.top}
-          zoom={zoom}
-          onNavigate={handleMiniMapNavigate}
-          onClose={() => setShowMiniMap(false)}
-        />
-      )}
 
       <PersonEditDialog
         person={editingPerson}
