@@ -34,6 +34,7 @@ export function TreeMiniMap({
   onNavigate,
 }: TreeMiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef       = useRef<SVGSVGElement>(null);
   const [mmWidth, setMmWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1200,
   );
@@ -54,33 +55,42 @@ export function TreeMiniMap({
 
   const totalW = treeWidth  + 2 * CANVAS_PAD;
   const totalH = treeHeight + 2 * CANVAS_PAD;
-  const scaleX = mmWidth        / totalW;
-  const scaleY = MINIMAP_HEIGHT / totalH;
 
-  const nX = (x: number) => (x + CANVAS_PAD) * scaleX;
-  const nY = (y: number) => (y + CANVAS_PAD) * scaleY;
+  // Uniform scale: fit to height first, but never exceed available width.
+  // This preserves aspect ratio and avoids horizontal stretching for narrow trees.
+  const scaleByHeight = MINIMAP_HEIGHT / totalH;
+  const scaleByWidth  = mmWidth        / totalW;
+  const scale  = Math.min(scaleByHeight, scaleByWidth);
 
-  const vpX = Math.max(0, scrollLeft / zoom * scaleX);
-  const vpY = Math.max(0, scrollTop  / zoom * scaleY);
-  const vpW = Math.min(Math.max(6, viewportWidth  / zoom * scaleX), mmWidth);
-  const vpH = Math.min(Math.max(6, viewportHeight / zoom * scaleY), MINIMAP_HEIGHT);
+  // The SVG is only as wide as the actual content – CSS flex centers it.
+  const svgWidth = Math.max(1, Math.round(totalW * scale));
 
+  const nX = (x: number) => (x + CANVAS_PAD) * scale;
+  const nY = (y: number) => (y + CANVAS_PAD) * scale;
+
+  const vpX = Math.max(0, scrollLeft / zoom * scale);
+  const vpY = Math.max(0, scrollTop  / zoom * scale);
+  const vpW = Math.min(Math.max(6, viewportWidth  / zoom * scale), svgWidth);
+  const vpH = Math.min(Math.max(6, viewportHeight / zoom * scale), MINIMAP_HEIGHT);
+
+  // Navigation: use the SVG element's own bounding rect so we always work in
+  // SVG-local coordinates regardless of where the SVG sits in the container.
   const navigateToMinimapX = useCallback(
     (clientX: number): number => {
-      const rect = containerRef.current?.getBoundingClientRect();
+      const rect = svgRef.current?.getBoundingClientRect();
       if (!rect) return scrollLeft;
-      const mx = Math.max(0, Math.min(clientX - rect.left, mmWidth));
-      const newSL = Math.max(0, ((mx / mmWidth) * totalW - viewportWidth / zoom / 2) * zoom);
+      const mx    = Math.max(0, Math.min(clientX - rect.left, svgWidth));
+      const newSL = Math.max(0, ((mx / svgWidth) * totalW - viewportWidth / zoom / 2) * zoom);
       onNavigate(newSL, scrollTop);
       return newSL;
     },
-    [mmWidth, totalW, viewportWidth, zoom, scrollTop, scrollLeft, onNavigate],
+    [svgWidth, totalW, viewportWidth, zoom, scrollTop, scrollLeft, onNavigate],
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      const rect = containerRef.current?.getBoundingClientRect();
+      const rect = svgRef.current?.getBoundingClientRect();
       if (!rect) return;
       const mx = e.clientX - rect.left;
       const onIndicator = mx >= vpX && mx <= vpX + vpW;
@@ -98,7 +108,7 @@ export function TreeMiniMap({
   useEffect(() => {
     if (!isDragging) return;
     const onMove = (e: MouseEvent) => {
-      const deltaScroll = ((e.clientX - dragRef.current.startClientX) / mmWidth) * totalW * zoom;
+      const deltaScroll = ((e.clientX - dragRef.current.startClientX) / svgWidth) * totalW * zoom;
       onNavigate(Math.max(0, dragRef.current.startScrollLeft + deltaScroll), scrollTop);
     };
     const onUp = () => setIsDragging(false);
@@ -108,26 +118,45 @@ export function TreeMiniMap({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [isDragging, mmWidth, totalW, zoom, scrollTop, onNavigate]);
+  }, [isDragging, svgWidth, totalW, zoom, scrollTop, onNavigate]);
 
   return (
     <div
       ref={containerRef}
       className="shrink-0 print:hidden select-none border-t border-border"
       style={{
-        height: MINIMAP_HEIGHT,
-        background: 'hsl(var(--background))',
-        cursor: isDragging ? 'grabbing' : 'crosshair',
+        height:          MINIMAP_HEIGHT,
+        background:      'hsl(var(--background))',
+        cursor:          isDragging ? 'grabbing' : 'crosshair',
+        display:         'flex',
+        alignItems:      'center',
+        justifyContent:  'center',
       }}
     >
-      <svg width={mmWidth} height={MINIMAP_HEIGHT} style={{ display: 'block' }} onMouseDown={handleMouseDown}>
+      <svg
+        ref={svgRef}
+        width={svgWidth}
+        height={MINIMAP_HEIGHT}
+        style={{ display: 'block', flexShrink: 0 }}
+        onMouseDown={handleMouseDown}
+      >
         {/* Background */}
-        <rect width={mmWidth} height={MINIMAP_HEIGHT} fill="hsl(var(--muted) / 0.15)" />
+        <rect width={svgWidth} height={MINIMAP_HEIGHT} fill="hsl(var(--muted) / 0.15)" />
         {/* White canvas area */}
-        <rect x={CANVAS_PAD * scaleX} y={CANVAS_PAD * scaleY} width={treeWidth * scaleX} height={treeHeight * scaleY} fill="white" stroke="#d1d5db" strokeWidth={0.5} />
+        <rect
+          x={CANVAS_PAD * scale} y={CANVAS_PAD * scale}
+          width={treeWidth * scale} height={treeHeight * scale}
+          fill="white" stroke="#d1d5db" strokeWidth={0.5}
+        />
         {/* Person boxes */}
         {nodes.map((n, i) => (
-          <rect key={i} x={nX(n.x)} y={nY(n.y)} width={Math.max(1, n.width * scaleX)} height={Math.max(1, n.height * scaleY)} fill={n.color === 'white' ? '#e5e7eb' : n.color} stroke="none" />
+          <rect
+            key={i}
+            x={nX(n.x)} y={nY(n.y)}
+            width={Math.max(1, n.width * scale)} height={Math.max(1, n.height * scale)}
+            fill={n.color === 'white' ? '#e5e7eb' : n.color}
+            stroke="none"
+          />
         ))}
         {/* Full-height viewport band */}
         <rect x={vpX} y={0} width={vpW} height={MINIMAP_HEIGHT} fill="rgba(59,130,246,0.07)" style={{ pointerEvents: 'none' }} />

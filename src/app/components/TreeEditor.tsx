@@ -231,7 +231,7 @@ export function TreeEditor({ tree, onUpdateTree, onBack }: TreeEditorProps) {
                           </p>
                           {person.birthDate && (
                             <p className="text-xs text-muted-foreground">
-                              b. {person.birthDate}
+                              * {person.birthDate}
                             </p>
                           )}
                         </div>

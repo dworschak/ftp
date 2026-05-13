@@ -97,13 +97,13 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     lines.push(person.firstName);
     lines.push(person.lastName);
     if (layout.showBirthDate && person.birthDate) {
-      lines.push(`b. ${formatDate(person.birthDate, layout.dateFormat)}`);
+      lines.push(`* ${formatDate(person.birthDate, layout.dateFormat)}`);
     }
     if (layout.showBirthPlace && person.birthPlace) {
       lines.push(person.birthPlace);
     }
     if (layout.showDeathDate && person.deathDate) {
-      lines.push(`d. ${formatDate(person.deathDate, layout.dateFormat)}`);
+      lines.push(`† ${formatDate(person.deathDate, layout.dateFormat)}`);
     }
     if (layout.showDeathPlace && person.deathPlace) {
       lines.push(person.deathPlace);
@@ -923,9 +923,18 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
     const mdPts = buildParentDropPath(motherCenterX, motherBottomY, motherNode.generation, lowerParentGen, parentsMidX, dropY);
 
     if (layout.lineStyle === 'rounded') {
-      lines.push(<path key={`fd-${ck}`} d={buildRoundedPath(fdPts, cornerR)} stroke={coupleLineColor} strokeWidth={layout.lineWidth} fill="none"/>);
+      // Extend each parent path with a short downward stub past the junction so that
+      // the horizontal→vertical transition AT the couple meeting point becomes an
+      // interior corner and gets rounded by buildRoundedPath.  Without the stub the
+      // junction is the last waypoint of each path and therefore left sharp (right→down
+      // for the father, left→down for the mother), producing the T-intersection bug.
+      // The stem / child line starts at dropY and covers the stub overlap seamlessly.
+      const junctionStub = Math.min(cornerR, dropDistance);
+      const fdPtsR: Array<[number, number]> = [...fdPts, [parentsMidX, dropY + junctionStub]];
+      const mdPtsR: Array<[number, number]> = [...mdPts, [parentsMidX, dropY + junctionStub]];
+      lines.push(<path key={`fd-${ck}`} d={buildRoundedPath(fdPtsR, cornerR)} stroke={coupleLineColor} strokeWidth={layout.lineWidth} fill="none"/>);
       addPathLength(fdPts);
-      lines.push(<path key={`md-${ck}`} d={buildRoundedPath(mdPts, cornerR)} stroke={coupleLineColor} strokeWidth={layout.lineWidth} fill="none"/>);
+      lines.push(<path key={`md-${ck}`} d={buildRoundedPath(mdPtsR, cornerR)} stroke={coupleLineColor} strokeWidth={layout.lineWidth} fill="none"/>);
       addPathLength(mdPts);
     } else {
       // Straight: draw each waypoint segment individually
@@ -1218,7 +1227,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
                 if (layout.showBirthDate && node.person.birthDate) {
                   elements.push(
                     <text key="birth-date" x={x + node.width / 2} y={currentY} textAnchor="middle" fontSize={ts - 2} fill="#666">
-                      b. {formatDate(node.person.birthDate, layout.dateFormat)}
+                      * {formatDate(node.person.birthDate, layout.dateFormat)}
                     </text>
                   );
                   currentY += ts + sg;
@@ -1236,7 +1245,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
                 if (layout.showDeathDate && node.person.deathDate) {
                   elements.push(
                     <text key="death-date" x={x + node.width / 2} y={currentY} textAnchor="middle" fontSize={ts - 2} fill="#666">
-                      d. {formatDate(node.person.deathDate, layout.dateFormat)}
+                      † {formatDate(node.person.deathDate, layout.dateFormat)}
                     </text>
                   );
                   currentY += ts + sg;

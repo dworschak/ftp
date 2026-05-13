@@ -77,13 +77,13 @@ export function GedcomUploadDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>GEDCOM importieren</DialogTitle>
+          <DialogTitle>Import GEDCOM</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Target tree info */}
           <p className="text-sm text-muted-foreground">
-            Diese Datei ersetzt alle Personen in <strong>{treeName}</strong>.
+            This file will replace all people in <strong>{treeName}</strong>.
           </p>
 
           {/* Drop zone */}
@@ -103,7 +103,7 @@ export function GedcomUploadDialog({
               <p className="text-sm font-medium">{fileName}</p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                .ged Datei hierher ziehen oder klicken zum Auswählen
+                Drag .ged file here or click to select
               </p>
             )}
             <input
@@ -124,22 +124,22 @@ export function GedcomUploadDialog({
             <div className="rounded-lg border border-border p-4 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-green-600">
                 <CheckCircle className="w-4 h-4" />
-                Datei gelesen – bereit zum Import
+                File read – ready to import
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-sm">
-                <Stat label="Personen"   value={parsed.stats.individualCount} />
-                <Stat label="Familien"   value={parsed.stats.familyCount} />
-                <Stat label="Ehen"       value={parsed.stats.marriageCount} />
-                <Stat label="Geburten"   value={parsed.stats.birthCount} />
-                <Stat label="Sterbedaten" value={parsed.stats.deathCount} />
+                <Stat label="People"     value={parsed.stats.individualCount} />
+                <Stat label="Families"   value={parsed.stats.familyCount} />
+                <Stat label="Marriages"  value={parsed.stats.marriageCount} />
+                <Stat label="Births"     value={parsed.stats.birthCount} />
+                <Stat label="Deaths"     value={parsed.stats.deathCount} />
               </div>
 
               {parsed.errors.length > 0 && (
                 <details className="text-xs">
                   <summary className="flex items-center gap-1 cursor-pointer text-amber-600">
                     <AlertTriangle className="w-3 h-3" />
-                    {parsed.errors.length} Warnung(en) – Details
+                    {parsed.errors.length} Warning(s) – Details
                   </summary>
                   <ul className="mt-2 space-y-1 text-muted-foreground max-h-32 overflow-y-auto pl-4 list-disc">
                     {parsed.errors.map((e, i) => (
@@ -162,7 +162,7 @@ export function GedcomUploadDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={importing}>
-            Abbrechen
+            Cancel
           </Button>
           <Button
             onClick={handleConfirm}
@@ -171,10 +171,10 @@ export function GedcomUploadDialog({
             {importing ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Speichern…
+                Saving…
               </>
             ) : (
-              `${parsed?.stats.individualCount ?? 0} Personen importieren`
+              `Import ${parsed?.stats.individualCount ?? 0} People`
             )}
           </Button>
         </DialogFooter>
@@ -191,4 +191,3 @@ function Stat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-

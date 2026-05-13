@@ -286,12 +286,12 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
             </button>
 
             {/* Canvas stats – always visible in header */}
-            {canvasStats && (
-              <div className="flex gap-3 items-center text-xs text-muted-foreground border border-border rounded-full px-3 py-1.5 select-none">
-                <span title="Zeichenfläche">📐 {canvasStats.widthPx} × {canvasStats.heightPx} px</span>
-                <span className="border-l border-border pl-3" title="Gesamtlänge aller Verbindungslinien">〰 {canvasStats.lineLengthPx.toLocaleString()} px</span>
-              </div>
-            )}
+             {canvasStats && (
+               <div className="flex gap-3 items-center text-xs text-muted-foreground border border-border rounded-full px-3 py-1.5 select-none">
+                 <span title="Canvas area">📐 {canvasStats.widthPx} × {canvasStats.heightPx} px</span>
+                 <span className="border-l border-border pl-3" title="Total length of all connection lines">〰 {canvasStats.lineLengthPx.toLocaleString()} px</span>
+               </div>
+             )}
 
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -353,13 +353,13 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
                   </div>
                   {rootPerson.birthDate && (
                     <div className="text-xs text-muted-foreground">
-                      b. {rootPerson.birthDate}
+                      * {rootPerson.birthDate}
                       {rootPerson.birthPlace && `, ${rootPerson.birthPlace}`}
                     </div>
                   )}
                   {rootPerson.deathDate && (
                     <div className="text-xs text-muted-foreground">
-                      d. {rootPerson.deathDate}
+                      † {rootPerson.deathDate}
                       {rootPerson.deathPlace && `, ${rootPerson.deathPlace}`}
                     </div>
                   )}

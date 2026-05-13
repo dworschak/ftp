@@ -111,13 +111,13 @@ function PersonPicker({
             onClick={() => setEditing(true)}
             className="shrink-0 text-xs text-primary hover:underline px-1"
           >
-            Ändern
+            Edit
           </button>
           <button
             type="button"
             onClick={() => onChange(undefined)}
             className="shrink-0 text-muted-foreground hover:text-destructive p-0.5"
-            title="Entfernen"
+            title="Remove"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -135,7 +135,6 @@ function PersonPicker({
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               className="pl-8 h-9 text-sm"
-              placeholder={`${label} suchen…`}
               value={query}
               onChange={e => setQuery(e.target.value)}
               autoFocus={editing}
@@ -175,7 +174,7 @@ function PersonPicker({
           </div>
         )}
         {query.length > 0 && filtered.length === 0 && (
-          <p className="mt-1 text-xs text-muted-foreground px-1">Keine Person gefunden.</p>
+          <p className="mt-1 text-xs text-muted-foreground px-1">No people found.</p>
         )}
       </div>
     </div>
@@ -248,9 +247,9 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <Tabs defaultValue="stammdaten" className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <TabsList className="mx-6 mt-3 mb-0 self-start shrink-0">
-              <TabsTrigger value="stammdaten">Stammdaten</TabsTrigger>
+              <TabsTrigger value="stammdaten">Master Data</TabsTrigger>
               <TabsTrigger value="familie" className="gap-1.5">
-                Familie
+                Family
                 {familyBadge > 0 && (
                   <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-semibold bg-primary/15 text-primary rounded-full">
                     {familyBadge}
@@ -266,7 +265,7 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
             >
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="firstName">Vorname</Label>
+                  <Label htmlFor="firstName">First Name</Label>
                   <Input
                     id="firstName"
                     value={formData.firstName}
@@ -275,7 +274,7 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="lastName">Nachname</Label>
+                  <Label htmlFor="lastName">Last Name</Label>
                   <Input
                     id="lastName"
                     value={formData.lastName}
@@ -286,7 +285,7 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="gender">Geschlecht</Label>
+                <Label htmlFor="gender">Gender</Label>
                 <Select
                   value={formData.gender ?? 'other'}
                   onValueChange={v => handleChange('gender', v)}
@@ -295,85 +294,85 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="male">Männlich ♂</SelectItem>
-                    <SelectItem value="female">Weiblich ♀</SelectItem>
-                    <SelectItem value="other">Sonstiges</SelectItem>
+                    <SelectItem value="male">Male ♂</SelectItem>
+                    <SelectItem value="female">Female ♀</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Geburt</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Birth</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="birthDate">Datum</Label>
+                    <Label htmlFor="birthDate">Date</Label>
                     <Input
                       id="birthDate"
                       value={formData.birthDate ?? ''}
                       onChange={e => handleChange('birthDate', e.target.value || undefined)}
-                      placeholder="z. B. 1875-01-10"
+                      placeholder="e.g. 1875-01-10"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="birthPlace">Ort</Label>
+                    <Label htmlFor="birthPlace">Place</Label>
                     <Input
                       id="birthPlace"
                       value={formData.birthPlace ?? ''}
                       onChange={e => handleChange('birthPlace', e.target.value || undefined)}
-                      placeholder="z. B. Berlin"
+                      placeholder="e.g. Berlin"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Tod</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Death</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="deathDate">Datum</Label>
+                    <Label htmlFor="deathDate">Date</Label>
                     <Input
                       id="deathDate"
                       value={formData.deathDate ?? ''}
                       onChange={e => handleChange('deathDate', e.target.value || undefined)}
-                      placeholder="z. B. 1950-02-06"
+                      placeholder="e.g. 1950-02-06"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="deathPlace">Ort</Label>
+                    <Label htmlFor="deathPlace">Place</Label>
                     <Input
                       id="deathPlace"
                       value={formData.deathPlace ?? ''}
                       onChange={e => handleChange('deathPlace', e.target.value || undefined)}
-                      placeholder="z. B. München"
+                      placeholder="e.g. Munich"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Heirat</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Marriage</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="marriageDate">Datum</Label>
+                    <Label htmlFor="marriageDate">Date</Label>
                     <Input
                       id="marriageDate"
                       value={formData.marriageDate ?? ''}
                       onChange={e => handleChange('marriageDate', e.target.value || undefined)}
-                      placeholder="z. B. 1900-06-22"
+                      placeholder="e.g. 1900-06-22"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="marriagePlace">Ort</Label>
+                    <Label htmlFor="marriagePlace">Place</Label>
                     <Input
                       id="marriagePlace"
                       value={formData.marriagePlace ?? ''}
                       onChange={e => handleChange('marriagePlace', e.target.value || undefined)}
-                      placeholder="z. B. Hamburg"
+                      placeholder="e.g. Hamburg"
                     />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Wird auf der Verbindungslinie zum Ehepartner im Baum angezeigt.
+                  Displayed on the connection line to the spouse in the tree.
                 </p>
               </div>
             </TabsContent>
@@ -461,9 +460,9 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
 
           <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
             <Button type="button" variant="outline" onClick={onClose}>
-              Abbrechen
+              Cancel
             </Button>
-            <Button type="submit">Änderungen speichern</Button>
+            <Button type="submit">Save Changes</Button>
           </DialogFooter>
         </form>
       </DialogContent>

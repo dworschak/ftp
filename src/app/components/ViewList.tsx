@@ -1,4 +1,4 @@
-import { FamilyTree, SavedView } from '../types';
+import { FamilyTree } from '../types';
 import { Plus, Eye, Trash2, Upload } from 'lucide-react';
 import { formatDate } from '../utils/dateFormat';
 
@@ -127,10 +127,10 @@ export function ViewList({
                       </p>
                       <div className="text-xs text-muted-foreground mt-1">
                         {rootPerson.birthDate && (
-                          <p>b. {formatDate(rootPerson.birthDate, view.layout.dateFormat)}</p>
+                          <p>* {formatDate(rootPerson.birthDate, view.layout.dateFormat)}</p>
                         )}
                         {rootPerson.deathDate && (
-                          <p>d. {formatDate(rootPerson.deathDate, view.layout.dateFormat)}</p>
+                          <p>† {formatDate(rootPerson.deathDate, view.layout.dateFormat)}</p>
                         )}
                       </div>
                     </div>

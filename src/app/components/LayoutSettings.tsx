@@ -235,24 +235,24 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
         </p>
       </div>
 
-      <div>
-        <label htmlFor="minBoxWidth" className="block text-sm mb-2">
-          Mindestbreite Personenkachel: {layout.minBoxWidth}px
-        </label>
-        <input
-          id="minBoxWidth"
-          type="range"
-          min="0"
-          max="150"
-          step="5"
-          value={layout.minBoxWidth}
-          onChange={(e) => handleChange('minBoxWidth', parseInt(e.target.value))}
-          className="w-full"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          0 = reine Inhaltsbreite, kleiner Wert = kompaktere Kacheln
-        </p>
-      </div>
+       <div>
+         <label htmlFor="minBoxWidth" className="block text-sm mb-2">
+           Minimum Person Box Width: {layout.minBoxWidth}px
+         </label>
+         <input
+           id="minBoxWidth"
+           type="range"
+           min="0"
+           max="150"
+           step="5"
+           value={layout.minBoxWidth}
+           onChange={(e) => handleChange('minBoxWidth', parseInt(e.target.value))}
+           className="w-full"
+         />
+         <p className="text-xs text-muted-foreground mt-1">
+           0 = content width only, smaller values = more compact boxes
+         </p>
+       </div>
 
       <div>
         <label htmlFor="boxPadding" className="block text-sm mb-2">

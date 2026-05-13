@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Person } from '../types';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 interface PersonSearchProps {
   people: Person[];
@@ -61,7 +61,7 @@ export function PersonSearch({ people, selectedPersonId, onSelectPerson }: Perso
               </span>
               {selectedPerson.birthDate && (
                 <span className="text-xs text-muted-foreground">
-                  b. {selectedPerson.birthDate}
+                  * {selectedPerson.birthDate}
                 </span>
               )}
             </div>
@@ -86,9 +86,9 @@ export function PersonSearch({ people, selectedPersonId, onSelectPerson }: Perso
                       {person.firstName} {person.lastName}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {person.birthDate && `b. ${person.birthDate}`}
+                      {person.birthDate && `* ${person.birthDate}`}
                       {person.birthDate && person.deathDate && ' • '}
-                      {person.deathDate && `d. ${person.deathDate}`}
+                      {person.deathDate && `† ${person.deathDate}`}
                     </div>
                   </div>
                 </button>
