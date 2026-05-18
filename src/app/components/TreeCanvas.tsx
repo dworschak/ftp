@@ -34,6 +34,7 @@ interface TreeNode {
   scale: number;
   effectiveTextSize: number;
   effectivePadding: number;
+  isSibling?: boolean; // true for sibling nodes added via showSiblingsGen0/Gen1
 }
 
 const backgroundColors: Record<BackgroundSkin, string> = {
@@ -511,6 +512,160 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
       if (rightId) buildDFS(rightId);
     };
     buildDFS(rootPersonId);
+  }
+
+  // ── Sibling placement (Gen 0 and Gen 1) ──────────────────────────────────
+  // Siblings are placed horizontally adjacent to the main person in the same
+  // generation row, ordered chronologically (born-before → left, born-after → right).
+  // They are added to allNodes / nodeMap so the existing coupleToChildren and
+  // single-parent line-drawing code picks them up automatically.
+  if (layout.showSiblingsGen0 || layout.showSiblingsGen1) {
+    // Helper: extract birth year (used for sorting)
+    const extractBirthYearEarly = (dateStr: string | undefined): number | null => {
+      if (!dateStr) return null;
+      const m = dateStr.match(/\b(1[0-9]{3}|20[0-9]{2})\b/);
+      return m ? parseInt(m[1]) : null;
+    };
+
+    // Helper: find siblings of a person (at least one shared parent), skip already-placed nodes
+    const findSiblings = (person: Person): Person[] => {
+      const sibSet = new Set<string>();
+      people.forEach(p => {
+        if (p.id === person.id || nodeMap.has(p.id)) return;
+        if (person.fatherId && p.fatherId === person.fatherId) sibSet.add(p.id);
+        if (person.motherId && p.motherId === person.motherId) sibSet.add(p.id);
+      });
+      return [...sibSet]
+        .map(id => people.find(p => p.id === id))
+        .filter((p): p is Person => !!p);
+    };
+
+    // Place sibling nodes left/right of a main person, chronologically sorted
+    const addSiblingGroup = (mainPersonId: string, siblings: Person[], generation: number): void => {
+      if (siblings.length === 0) return;
+      const mainNode = nodeMap.get(mainPersonId);
+      if (!mainNode) return;
+
+      // Siblings use a fixed reduced scale (1.0) regardless of their generation so
+      // they appear visually smaller than the main ancestor in the same row.
+      const scale = 1.0;
+
+      // Pre-compute box dimensions for each sibling
+      siblings.forEach(sib => {
+        if (boxDimensions.has(sib.id)) return;
+        const dims = calculateBoxSize(sib, scale);
+        boxDimensions.set(sib.id, {
+          width:  Math.max(1, Math.round(dims.width)),
+          height: Math.max(1, Math.round(dims.height)),
+        });
+      });
+
+      const mainBY = extractBirthYearEarly(mainNode.person.birthDate);
+
+      // Siblings born ≤ main person → go LEFT (newest closest to main person)
+      const leftSibs = siblings
+        .filter(s => {
+          const y = extractBirthYearEarly(s.birthDate);
+          return y !== null && mainBY !== null && y <= mainBY;
+        })
+        .sort((a, b) =>
+          (extractBirthYearEarly(b.birthDate) ?? 0) - (extractBirthYearEarly(a.birthDate) ?? 0)
+        );
+
+      // Siblings born > main person or unknown year → go RIGHT (oldest closest to main person)
+      const rightSibs = siblings
+        .filter(s => {
+          const y = extractBirthYearEarly(s.birthDate);
+          return y === null || mainBY === null || y > mainBY;
+        })
+        .sort((a, b) =>
+          (extractBirthYearEarly(a.birthDate) ?? 0) - (extractBirthYearEarly(b.birthDate) ?? 0)
+        );
+
+      // Place left siblings going leftward from main person's left edge
+      let leftEdge = mainNode.x;
+      for (const sib of leftSibs) {
+        const dims = boxDimensions.get(sib.id)!;
+        leftEdge -= layout.horizontalSpacing + dims.width;
+        computedGenerations.set(sib.id, generation);
+        subtreeRoots.set(sib.id, subtreeRoots.get(mainPersonId) ?? 'root');
+        const node: TreeNode = {
+          person:            sib,
+          x:                 leftEdge,
+          y:                 generation,
+          generation,
+          width:             dims.width,
+          height:            dims.height,
+          subtreeRoot:       subtreeRoots.get(sib.id),
+          subtreeWidth:      0,
+          scale,
+          effectiveTextSize: layout.textSize * scale,
+          effectivePadding:  layout.personBoxPadding * scale,
+          isSibling:         true,
+        };
+        allNodes.push(node);
+        nodeMap.set(sib.id, node);
+      }
+
+      // Place right siblings going rightward from main person's right edge
+      let rightEdge = mainNode.x + mainNode.width;
+      for (const sib of rightSibs) {
+        const dims = boxDimensions.get(sib.id)!;
+        rightEdge += layout.horizontalSpacing;
+        computedGenerations.set(sib.id, generation);
+        subtreeRoots.set(sib.id, subtreeRoots.get(mainPersonId) ?? 'root');
+        const node: TreeNode = {
+          person:            sib,
+          x:                 rightEdge,
+          y:                 generation,
+          generation,
+          width:             dims.width,
+          height:            dims.height,
+          subtreeRoot:       subtreeRoots.get(sib.id),
+          subtreeWidth:      0,
+          scale,
+          effectiveTextSize: layout.textSize * scale,
+          effectivePadding:  layout.personBoxPadding * scale,
+          isSibling:         true,
+        };
+        allNodes.push(node);
+        nodeMap.set(sib.id, node);
+        rightEdge += dims.width;
+      }
+    };
+
+    if (layout.showSiblingsGen0) {
+      addSiblingGroup(rootPersonId, findSiblings(rootPerson), 0);
+    }
+
+    if (layout.showSiblingsGen1) {
+      const gen1Father = rootPerson.fatherId ? people.find(p => p.id === rootPerson.fatherId) : null;
+      const gen1Mother = rootPerson.motherId ? people.find(p => p.id === rootPerson.motherId) : null;
+      if (gen1Father && nodeMap.has(gen1Father.id)) {
+        addSiblingGroup(
+          gen1Father.id,
+          findSiblings(gen1Father),
+          computedGenerations.get(gen1Father.id) ?? 1,
+        );
+      }
+      if (gen1Mother && nodeMap.has(gen1Mother.id)) {
+        addSiblingGroup(
+          gen1Mother.id,
+          findSiblings(gen1Mother),
+          computedGenerations.get(gen1Mother.id) ?? 1,
+        );
+      }
+    }
+
+    // Global X-shift: if any sibling was placed to the left of the left margin,
+    // shift ALL nodes rightward so the leftmost box starts at marginLeft.
+    if (allNodes.length > 0) {
+      const minNodeX = Math.min(...allNodes.map(n => n.x));
+      if (minNodeX < layout.marginLeft) {
+        const shift = Math.ceil(layout.marginLeft - minNodeX);
+        allNodes.forEach(node => { node.x += shift; });
+      }
+    }
   }
 
   // Group by generation for height calculations
@@ -1192,6 +1347,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
               key={node.person.id}
               onClick={() => onPersonClick?.(node.person)}
               style={{ cursor: onPersonClick ? 'pointer' : 'default' }}
+              opacity={node.isSibling ? 0.72 : 1}
             >
               <rect
                 x={x}

@@ -62,14 +62,13 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
           />
         </div>
         <div>
-          <label htmlFor="lastName" className="block text-sm mb-1">Last Name *</label>
+          <label htmlFor="lastName" className="block text-sm mb-1">Last Name</label>
           <input
             id="lastName"
             type="text"
             value={formData.lastName}
             onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
             className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
-            required
           />
         </div>
       </div>

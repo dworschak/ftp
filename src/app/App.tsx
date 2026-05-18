@@ -45,6 +45,8 @@ export default function App() {
                 dateFormat: v.layout.dateFormat ?? defaultLayoutSettings.dateFormat,
                 lineStyle: v.layout.lineStyle ?? defaultLayoutSettings.lineStyle,
                 lineWidth: v.layout.lineWidth ?? defaultLayoutSettings.lineWidth,
+                showSiblingsGen0: v.layout.showSiblingsGen0 ?? false,
+                showSiblingsGen1: v.layout.showSiblingsGen1 ?? false,
               },
             })),
           }));

@@ -279,7 +279,6 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
                     id="lastName"
                     value={formData.lastName}
                     onChange={e => handleChange('lastName', e.target.value)}
-                    required
                   />
                 </div>
               </div>

@@ -46,6 +46,8 @@ export interface LayoutSettings {
   swappedCouples: string[]; // Array of coupleKeys ("id1_id2" sorted) where mother is left, father right
   birthYearSpread: number;  // Max vertical offset in px between earliest/latest born within one generation row (0 = off)
   minBoxWidth: number;       // Minimum person-box width in px (at scale 1.0); 0 = pure content width
+  showSiblingsGen0: boolean; // Show siblings of the root person (Generation 0)
+  showSiblingsGen1: boolean; // Show siblings of root's parents (Generation 1)
 }
 
 export interface SavedView {
@@ -93,4 +95,6 @@ export const defaultLayoutSettings: LayoutSettings = {
   swappedCouples: [],
   birthYearSpread: 0,
   minBoxWidth: 50,
+  showSiblingsGen0: false,
+  showSiblingsGen1: false,
 };

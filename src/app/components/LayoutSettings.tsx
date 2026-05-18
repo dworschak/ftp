@@ -166,6 +166,24 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
             />
             <span className="text-sm">Linien in Teilbaum-Farbe</span>
           </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={layout.showSiblingsGen0}
+              onChange={(e) => handleChange('showSiblingsGen0', e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm">Show siblings of root person (Gen 0)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={layout.showSiblingsGen1}
+              onChange={(e) => handleChange('showSiblingsGen1', e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm">Show siblings of root's parents (Gen 1)</span>
+          </label>
         </div>
       </div>
 
