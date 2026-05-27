@@ -16,6 +16,7 @@ const colorSchemes: { value: ColorScheme; label: string; description: string }[]
   { value: 'uniform', label: 'Uniform', description: 'All boxes same color' },
   { value: 'by-grandparent', label: 'By Grandparent', description: 'One color per grandparent subtree' },
   { value: 'by-great-grandparent', label: 'By Great-Grandparent', description: 'One color per great-grandparent subtree' },
+  { value: 'by-parish', label: 'By Parish', description: 'Color by birth parish (last part of birth place)' },
 ];
 
 export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
@@ -107,6 +108,17 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
             </label>
           ))}
         </div>
+        {layout.colorScheme !== 'uniform' && (
+          <label className="flex items-center gap-2 mt-3">
+            <input
+              type="checkbox"
+              checked={layout.showLegend ?? true}
+              onChange={(e) => handleChange('showLegend', e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm">Show legend</span>
+          </label>
+        )}
       </div>
 
       <div>

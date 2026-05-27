@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { FamilyTree, SavedView, GraphType, defaultLayoutSettings, Person } from '../types';
 import { PersonSearch } from './PersonSearch';
 import { LayoutSettings } from './LayoutSettings';
-import { TreeCanvas, PixelNode } from './TreeCanvas';
+import { TreeCanvas, PixelNode, LegendEntry } from './TreeCanvas';
 import { TreeMiniMap } from './TreeMiniMap';
 import { PersonEditDialog } from './PersonEditDialog';
 import { ChevronLeft, Printer, Save, ZoomIn, ZoomOut, Map } from 'lucide-react';
@@ -35,6 +35,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
   const [canvasStats, setCanvasStats] = useState<{ widthPx: number; heightPx: number; lineLengthPx: number } | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<PixelNode[]>([]);
   const [showMiniMap, setShowMiniMap] = useState(true);
+  const [legendEntries, setLegendEntries] = useState<LegendEntry[]>([]);
   const [scrollPos, setScrollPos] = useState({ left: 0, top: 0 });
   // Viewport dimensions of the scroll container (kept in state so the minimap
   // receives accurate values even after the settings panel is toggled or the
@@ -192,6 +193,16 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
         prev[prev.length - 1]?.y === nodes[nodes.length - 1].y
       ) return prev; // no re-render
       return nodes;
+    });
+  }, []);
+
+  const handleLegendData = useCallback((entries: LegendEntry[]) => {
+    setLegendEntries(prev => {
+      if (
+        prev.length === entries.length &&
+        prev.every((e, i) => e.label === entries[i].label && e.color === entries[i].color)
+      ) return prev; // identical – bail out, no re-render
+      return entries;
     });
   }, []);
 
@@ -375,7 +386,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
         )}
 
         {/* Canvas Area: flex column — scroll pane on top, minimap bar on bottom */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden relative">
           <div
             ref={scrollRef}
             className={`flex-1 overflow-auto bg-muted/20 relative${showMiniMap ? ' mmbar-scroll-hide' : ''}`}
@@ -410,6 +421,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
                     onCoupleSwap={handleCoupleSwap}
                     onStatsChange={handleStatsChange}
                     onNodesLayout={handleNodesLayout}
+                    onLegendData={handleLegendData}
                   />
                 </div>
               </div>
@@ -422,6 +434,28 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
               </div>
             )}
           </div>
+
+          {/* Legend overlay – shown when showLegend is enabled */}
+          {layout.showLegend && legendEntries.length > 0 && layout.colorScheme !== 'uniform' && (
+            <div className="absolute top-3 right-3 bg-background/95 border border-border rounded-lg shadow-md p-3 print:block pointer-events-none select-none z-10 max-w-[220px]">
+              <div className="text-xs font-semibold text-foreground mb-2 uppercase tracking-wide">
+                {layout.colorScheme === 'by-parish' && 'Parish'}
+                {layout.colorScheme === 'by-grandparent' && 'Grandparent'}
+                {layout.colorScheme === 'by-great-grandparent' && 'Great-Grandparent'}
+              </div>
+              <ul className="space-y-1">
+                {legendEntries.map((entry) => (
+                  <li key={entry.label} className="flex items-center gap-2">
+                    <span
+                      className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0 border border-black/10"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span className="text-xs text-foreground leading-tight">{entry.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Minimap sits below the scroll pane inside the canvas column —
               it naturally occupies only the canvas pane width and never

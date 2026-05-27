@@ -47,6 +47,7 @@ export default function App() {
                 lineWidth: v.layout.lineWidth ?? defaultLayoutSettings.lineWidth,
                 showSiblingsGen0: v.layout.showSiblingsGen0 ?? false,
                 showSiblingsGen1: v.layout.showSiblingsGen1 ?? false,
+                showLegend: v.layout.showLegend ?? true,
               },
             })),
           }));

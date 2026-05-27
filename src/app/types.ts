@@ -15,7 +15,7 @@ export interface Person {
 
 export type GraphType = 'ancestor' | 'descendant' | 'hourglass';
 export type BackgroundSkin = 'white' | 'cream' | 'light-blue' | 'light-green';
-export type ColorScheme = 'uniform' | 'by-grandparent' | 'by-great-grandparent';
+export type ColorScheme = 'uniform' | 'by-grandparent' | 'by-great-grandparent' | 'by-parish';
 export type DateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD MMM YYYY';
 export type LineStyle = 'straight' | 'rounded';
 export type LineColorMode = 'border' | 'subtree';
@@ -48,6 +48,7 @@ export interface LayoutSettings {
   minBoxWidth: number;       // Minimum person-box width in px (at scale 1.0); 0 = pure content width
   showSiblingsGen0: boolean; // Show siblings of the root person (Generation 0)
   showSiblingsGen1: boolean; // Show siblings of root's parents (Generation 1)
+  showLegend: boolean;       // Show/hide the color scheme legend overlay
 }
 
 export interface SavedView {
@@ -97,4 +98,5 @@ export const defaultLayoutSettings: LayoutSettings = {
   minBoxWidth: 50,
   showSiblingsGen0: false,
   showSiblingsGen1: false,
+  showLegend: true,
 };

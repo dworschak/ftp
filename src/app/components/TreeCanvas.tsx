@@ -11,6 +11,12 @@ export interface PixelNode {
   color: string;
 }
 
+/** One entry in the color-scheme legend. */
+export interface LegendEntry {
+  label: string;
+  color: string;
+}
+
 interface TreeCanvasProps {
   people: Person[];
   rootPersonId: string;
@@ -20,6 +26,7 @@ interface TreeCanvasProps {
   onCoupleSwap?: (coupleKey: string) => void;
   onStatsChange?: (widthPx: number, heightPx: number, totalLineLengthPx: number) => void;
   onNodesLayout?: (nodes: PixelNode[]) => void;
+  onLegendData?: (entries: LegendEntry[]) => void;
 }
 
 interface TreeNode {
@@ -55,7 +62,7 @@ const subtreeColors = [
   '#B2DFDB', // Light teal
 ];
 
-export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout, onPersonClick, onCoupleSwap, onStatsChange, onNodesLayout }: TreeCanvasProps) {
+export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout, onPersonClick, onCoupleSwap, onStatsChange, onNodesLayout, onLegendData }: TreeCanvasProps) {
   // ...existing code...
 
   if (!rootPersonId || people.length === 0) {
@@ -742,6 +749,59 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
   const getNodePixelY = (node: TreeNode): number =>
     getPixelYCached(node.generation) + (birthYearOffsets.get(node.person.id) ?? 0);
 
+  // ── Parish extraction helper ──────────────────────────────────────────────
+  // The parish is the last comma-separated segment of birthPlace,
+  // or the whole string if there is no comma.
+  // A trailing " <number>" suffix is stripped so that house numbers / lot
+  // numbers don't split the same village into separate entries.
+  // e.g. "Svatá Voršila 3, Ledenice" → "Ledenice"
+  //      "Velešín"                   → "Velešín"
+  //      "Siebenlinden 12"           → "Siebenlinden"
+  const getParish = (birthPlace: string | undefined): string | null => {
+    if (!birthPlace) return null;
+    const trimmed = birthPlace.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(',');
+    const last = parts[parts.length - 1].trim();
+    // Strip trailing " <digits>" (e.g. house / lot number)
+    return last.replace(/\s+\d+$/, '').trim() || null;
+  };
+
+  // A birth date qualifies for parish coloring only when it is an exact calendar
+  // day in YYYY-MM-DD format.  Approximate dates like "ca 1780", "1780", or
+  // "1780-06" are treated as unknown and the person is left uncoloured.
+  const hasExactBirthDate = (birthDate: string | undefined): boolean => {
+    if (!birthDate) return false;
+    return /^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim());
+  };
+
+  // Generate N visually distinct pastel colors evenly spread around the hue wheel.
+  // Saturation 50 % / lightness 80 % matches the feel of the subtreeColors palette
+  // while never repeating even for large parish counts.
+  const generateParishPalette = (count: number): string[] =>
+    Array.from({ length: count }, (_, i) =>
+      `hsl(${Math.round((i / count) * 360)}, 50%, 80%)`
+    );
+
+  // Build parish → color map from VISIBLE nodes only (allNodes) and only for
+  // persons with an exact birth date (YYYY-MM-DD).  Sorted alphabetically for
+  // a stable, predictable color assignment; each parish gets a unique color –
+  // no palette cycling.
+  const parishColorMap = new Map<string, string>();
+  if (layout.colorScheme === 'by-parish') {
+    const parishes = new Set<string>();
+    allNodes.forEach(node => {
+      if (!hasExactBirthDate(node.person.birthDate)) return;
+      const parish = getParish(node.person.birthPlace);
+      if (parish) parishes.add(parish);
+    });
+    const sortedParishes = [...parishes].sort((a, b) => a.localeCompare(b));
+    const palette = generateParishPalette(sortedParishes.length);
+    sortedParishes.forEach((parish, i) => {
+      parishColorMap.set(parish, palette[i]);
+    });
+  }
+
   // Canvas width: rightmost rendered node right-edge + right margin
   const canvasWidth = Math.ceil(
     Math.max(...allNodes.map(n => n.x + n.width)) + layout.marginRight
@@ -757,6 +817,17 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
   // Get color for person box
   const getPersonBoxColor = (node: TreeNode): string => {
     if (layout.colorScheme === 'uniform') {
+      return 'white';
+    }
+
+    // ── By-parish coloring ────────────────────────────────────────────────
+    if (layout.colorScheme === 'by-parish') {
+      if (!hasExactBirthDate(node.person.birthDate)) return 'white';
+      const parish = getParish(node.person.birthPlace);
+      if (parish) {
+        const color = parishColorMap.get(parish);
+        if (color) return color;
+      }
       return 'white';
     }
 
@@ -1314,6 +1385,30 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
         color: getPersonBoxColor(node),
       }));
       Promise.resolve().then(() => onNodesLayout(pixelNodes));
+    }
+    if (onLegendData) {
+      const entries: LegendEntry[] = [];
+      if (layout.colorScheme === 'by-parish') {
+        parishColorMap.forEach((color, parish) => {
+          entries.push({ label: parish, color });
+        });
+        // already sorted alphabetically since parishColorMap was built from sorted parishes
+      } else if (layout.colorScheme === 'by-grandparent') {
+        grandparents.forEach((id, idx) => {
+          const person = people.find(p => p.id === id);
+          if (person) {
+            entries.push({ label: `${person.firstName} ${person.lastName}`, color: subtreeColors[idx % subtreeColors.length] });
+          }
+        });
+      } else if (layout.colorScheme === 'by-great-grandparent') {
+        greatGrandparents.forEach((id, idx) => {
+          const person = people.find(p => p.id === id);
+          if (person) {
+            entries.push({ label: `${person.firstName} ${person.lastName}`, color: subtreeColors[idx % subtreeColors.length] });
+          }
+        });
+      }
+      Promise.resolve().then(() => onLegendData(entries));
     }
 
   return (
