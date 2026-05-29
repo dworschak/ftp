@@ -49,6 +49,7 @@ export interface LayoutSettings {
   showSiblingsGen0: boolean; // Show siblings of the root person (Generation 0)
   showSiblingsGen1: boolean; // Show siblings of root's parents (Generation 1)
   showLegend: boolean;       // Show/hide the color scheme legend overlay
+  showGenderSymbol: boolean; // Show ♂/♀ symbol in the top-right corner of person boxes
 }
 
 export interface SavedView {
@@ -99,4 +100,5 @@ export const defaultLayoutSettings: LayoutSettings = {
   showSiblingsGen0: false,
   showSiblingsGen1: false,
   showLegend: true,
+  showGenderSymbol: false,
 };

@@ -196,6 +196,15 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
             />
             <span className="text-sm">Show siblings of root's parents (Gen 1)</span>
           </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={layout.showGenderSymbol ?? false}
+              onChange={(e) => handleChange('showGenderSymbol', e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm">Show gender symbol (♂/♀) on person tiles</span>
+          </label>
         </div>
       </div>
 

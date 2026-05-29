@@ -1453,6 +1453,25 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
                 stroke={layout.borderColor}
                 strokeWidth={layout.borderWidth}
               />
+                {layout.showGenderSymbol && node.person.gender && node.person.gender !== 'other' && (() => {
+                const symbolSize = Math.max(8, Math.round(ts * 0.85));
+                const symbolX = x + node.width - pd * 0.6;
+                const symbolY = y + symbolSize * 0.9;
+                const isMale = node.person.gender === 'male';
+                return (
+                  <text
+                    x={symbolX}
+                    y={symbolY}
+                    textAnchor="end"
+                    fontSize={symbolSize}
+                    fill={isMale ? '#3b82f6' : '#ec4899'}
+                    style={{ userSelect: 'none' }}
+                    aria-hidden="true"
+                  >
+                    {isMale ? '♂' : '♀'}
+                  </text>
+                );
+              })()}
               <text
                 x={x + node.width / 2}
                 y={currentY}
