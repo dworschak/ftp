@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { FamilyTree, SavedView, GraphType, defaultLayoutSettings, Person } from '../types';
 import { PersonSearch } from './PersonSearch';
 import { LayoutSettings } from './LayoutSettings';
@@ -153,7 +153,10 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
 
   // After a wheel-zoom re-render, adjust scroll so the point under the cursor
   // stays at the same screen position (cursor-anchored zooming).
-  useEffect(() => {
+  // useLayoutEffect fires BEFORE the browser paints, so the scroll correction
+  // is applied before the frame is drawn – preventing the visible leftward jump
+  // that useEffect (post-paint) would cause at zoom levels > 100%.
+  useLayoutEffect(() => {
     const pending = pendingZoomScrollRef.current;
     if (pending && scrollRef.current) {
       scrollRef.current.scrollLeft = pending.worldX * zoom - pending.cursorX;
@@ -290,10 +293,10 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
                   ? 'bg-primary text-primary-foreground shadow-md'
                   : 'border border-border hover:bg-accent hover:border-primary'
               }`}
-              title="Klick um Übersichtskarte anzeigen/verbergen"
+              title="Toggle minimap overview"
             >
               <Map className="w-4 h-4" />
-              Karte {showMiniMap ? 'An' : 'Aus'}
+              Map {showMiniMap ? 'On' : 'Off'}
             </button>
 
             {/* Canvas stats – always visible in header */}
@@ -377,8 +380,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
                 </div>
               )}
 
-              <div className="border-t border-border pt-4">
-                <h3 className="mb-4">Layout Settings</h3>
+              <div className="border-t border-border pt-2">
                 <LayoutSettings layout={layout} onUpdate={setLayout} />
               </div>
             </div>
@@ -410,6 +412,12 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
                   style={{
                     transform:       `scale(${zoom})`,
                     transformOrigin: 'top left',
+                    // Pin the layout dimensions to the natural (unscaled) canvas size.
+                    // Without this, the sizer div (which is zoom× wider) stretches this
+                    // div to sizerWidth, and mx-auto inside TreeCanvas centres the SVG
+                    // with a large left offset at zoom > 100%.
+                    width:  canvasStats ? `${canvasStats.widthPx  + 64}px` : undefined,
+                    height: canvasStats ? `${canvasStats.heightPx + 64}px` : undefined,
                   }}
                 >
                   <TreeCanvas
