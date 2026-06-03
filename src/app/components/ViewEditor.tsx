@@ -5,7 +5,12 @@ import { LayoutSettings } from './LayoutSettings';
 import { TreeCanvas, PixelNode, LegendEntry } from './TreeCanvas';
 import { TreeMiniMap } from './TreeMiniMap';
 import { PersonEditDialog } from './PersonEditDialog';
-import { ChevronLeft, Printer, Save, ZoomIn, ZoomOut, Map } from 'lucide-react';
+import { useTreeExport } from '../hooks/useTreeExport';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import { ChevronLeft, Printer, Save, ZoomIn, ZoomOut, Map, Download, ImageDown, FileDown, FileCode2, Loader2 } from 'lucide-react';
 
 interface ViewEditorProps {
   tree: FamilyTree;
@@ -42,6 +47,28 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
   // browser window is resized).
   const [viewportDims, setViewportDims] = useState({ width: 0, height: 0, left: 0 });
   const statsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Ref forwarded to the <svg> element inside TreeCanvas – used for PNG/PDF/SVG export. */
+  const svgRef = useRef<SVGSVGElement>(null);
+  const { isExporting, exportError, exportAsPng, exportAsPdf, exportAsSvg } = useTreeExport(svgRef);
+
+  /**
+   * Per-browser max canvas dimension:
+   *   Chrome/Firefox ≈ 32 767 px  |  Safari ≈ 16 384 px
+   * We use the conservative Safari value so exports work everywhere.
+   */
+  const MAX_CANVAS_DIM = 16_384;
+
+  /** Highest pixel-ratio that won't cause the browser to clamp the canvas. */
+  const maxSafePngRatio = canvasStats
+    ? Math.max(1, Math.floor(Math.min(
+        MAX_CANVAS_DIM / canvasStats.widthPx,
+        MAX_CANVAS_DIM / canvasStats.heightPx,
+        8,
+      )))
+    : 1;
+
+  /** User-selected PNG quality multiplier, clamped to the safe range. */
+  const [pngPixelRatio, setPngPixelRatio] = useState(1);
   /** Stores the world-space anchor point set by a wheel zoom, consumed by a
    *  useEffect after the new zoom is rendered so the point under the cursor
    *  stays fixed. */
@@ -236,6 +263,16 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
     window.print();
   };
 
+  /** Slugify the view name so it can be used as a file name. */
+  const buildFilename = (ext: 'png' | 'pdf' | 'svg') => {
+    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'family-tree';
+    return `${slug}.${ext}`;
+  };
+
+  const handleExportPng = () => exportAsPng(buildFilename('png'), pngPixelRatio);
+  const handleExportPdf = () => exportAsPdf(buildFilename('pdf'));
+  const handleExportSvg = () => exportAsSvg(buildFilename('svg'));
+
   const handlePersonClick = (person: Person) => {
     if (hasDraggedRef.current) return; // Ignore clicks that were actually drags
     setEditingPerson(person);
@@ -320,6 +357,112 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
               <Printer className="w-4 h-4" />
               Print
             </button>
+
+            {/* ── Single Export dropdown ── */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  disabled={isExporting || !rootPersonId}
+                  className="flex items-center gap-2 px-4 py-2 text-sm border border-border rounded-md hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Export tree"
+                >
+                  {isExporting
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Download className="w-4 h-4" />}
+                  Export
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+
+                {/* ── PNG ── */}
+                <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pb-1">
+                  PNG — Raster
+                </DropdownMenuLabel>
+
+                {/* Quality selector – prevents dropdown close on click */}
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  className="flex-col items-start gap-1.5 cursor-default focus:bg-transparent"
+                >
+                  <span className="text-xs text-muted-foreground">Quality (pixel ratio)</span>
+                  <div className="flex gap-1 flex-wrap">
+                    {[1, 2, 3, 4].map((ratio) => {
+                      const outW = canvasStats ? canvasStats.widthPx  * ratio : 0;
+                      const outH = canvasStats ? canvasStats.heightPx * ratio : 0;
+                      const overLimit = canvasStats && (outW > MAX_CANVAS_DIM || outH > MAX_CANVAS_DIM);
+                      const isActive  = pngPixelRatio === ratio;
+                      return (
+                        <button
+                          key={ratio}
+                          onClick={() => setPngPixelRatio(ratio)}
+                          title={
+                            overLimit
+                              ? `⚠ ${outW.toLocaleString()} × ${outH.toLocaleString()} px – exceeds browser canvas limit (${MAX_CANVAS_DIM.toLocaleString()} px). Output will be clipped.`
+                              : canvasStats
+                                ? `Output: ${outW.toLocaleString()} × ${outH.toLocaleString()} px`
+                                : `${ratio}×`
+                          }
+                          className={[
+                            'px-2 py-0.5 rounded text-xs font-mono border transition-colors',
+                            isActive
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'border-border hover:bg-accent',
+                            overLimit ? 'opacity-60' : '',
+                          ].join(' ')}
+                        >
+                          {ratio}×{overLimit ? ' ⚠' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {canvasStats && (
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      Output: {(canvasStats.widthPx * pngPixelRatio).toLocaleString()} × {(canvasStats.heightPx * pngPixelRatio).toLocaleString()} px
+                      {canvasStats.widthPx * pngPixelRatio > MAX_CANVAS_DIM || canvasStats.heightPx * pngPixelRatio > MAX_CANVAS_DIM
+                        ? ' ⚠ canvas limit exceeded'
+                        : ''}
+                    </span>
+                  )}
+                  {maxSafePngRatio === 1 && canvasStats && canvasStats.widthPx > MAX_CANVAS_DIM && (
+                    <span className="text-[11px] text-amber-600 leading-tight">
+                      Tree is wider than {MAX_CANVAS_DIM.toLocaleString()} px. Use SVG or PDF for lossless export.
+                    </span>
+                  )}
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={handleExportPng} className="gap-2 cursor-pointer">
+                  <ImageDown className="w-4 h-4 shrink-0" />
+                  <div>
+                    <div className="font-medium">Download PNG</div>
+                    <div className="text-xs text-muted-foreground">Raster · {pngPixelRatio}× pixel ratio</div>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                {/* ── Vector ── */}
+                <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pb-1">
+                  Vector — Infinite resolution
+                </DropdownMenuLabel>
+
+                <DropdownMenuItem onClick={handleExportPdf} className="gap-2 cursor-pointer">
+                  <FileDown className="w-4 h-4 shrink-0" />
+                  <div>
+                    <div className="font-medium">Download PDF</div>
+                    <div className="text-xs text-muted-foreground">True vector · no canvas limit</div>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={handleExportSvg} className="gap-2 cursor-pointer">
+                  <FileCode2 className="w-4 h-4 shrink-0" />
+                  <div>
+                    <div className="font-medium">Download SVG</div>
+                    <div className="text-xs text-muted-foreground">Scalable · open in Inkscape / Illustrator</div>
+                  </div>
+                </DropdownMenuItem>
+
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               onClick={handleSave}
               className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90"
@@ -330,6 +473,13 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
           </div>
         </div>
       </div>
+
+      {/* Export error banner */}
+      {exportError && (
+        <div className="bg-destructive/10 border-b border-destructive/30 text-destructive text-sm px-6 py-2 print:hidden">
+          Export failed: {exportError}
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Settings Panel */}
@@ -421,6 +571,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
                   }}
                 >
                   <TreeCanvas
+                    ref={svgRef}
                     people={tree.people}
                     rootPersonId={rootPersonId}
                     graphType={graphType}

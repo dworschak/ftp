@@ -1,5 +1,5 @@
 import { Person, LayoutSettings, GraphType, BackgroundSkin } from '../types';
-import { ReactElement } from 'react';
+import { ReactElement, forwardRef } from 'react';
 import { formatDate } from '../utils/dateFormat';
 
 /** A person box in pixel coordinates – used by the minimap. */
@@ -62,7 +62,10 @@ const subtreeColors = [
   '#B2DFDB', // Light teal
 ];
 
-export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout, onPersonClick, onCoupleSwap, onStatsChange, onNodesLayout, onLegendData }: TreeCanvasProps) {
+export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function TreeCanvas(
+  { people, rootPersonId, graphType: _graphType, layout, onPersonClick, onCoupleSwap, onStatsChange, onNodesLayout, onLegendData }: TreeCanvasProps,
+  svgRef,
+) {
   // ...existing code...
 
   if (!rootPersonId || people.length === 0) {
@@ -1032,9 +1035,18 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
         // Standard: same level or lower – simple 3-point path
         return [[parentCX, parentBY], [parentCX, meetY], [meetX, meetY]];
       }
-      // Higher parent: route around the lower-gen row
+      // Higher parent: first try going straight through the lower-gen row at parentCX.
+      // This produces the most direct path (identical shape to the standard case) and
+      // eliminates the wide lateral detour that arose when the corridor search was
+      // anchored to meetX (far from the parent's natural drop-line).
+      if (isXFreeInGens(parentCX, lowerParentGen, lowerParentGen)) {
+        return [[parentCX, parentBY], [parentCX, meetY], [meetX, meetY]];
+      }
+      // parentCX is blocked in the lower-gen row (e.g. the lower parent's box is
+      // there).  Route via a free corridor, but search outward from parentCX rather
+      // than meetX so the horizontal detour segment stays as short as possible.
       const gapY  = getGapMidY(parentGen, lowerParentGen);
-      const corrX = findSkipCorridorX(meetX, lowerParentGen, lowerParentGen);
+      const corrX = findSkipCorridorX(parentCX, lowerParentGen, lowerParentGen);
       return [
         [parentCX, parentBY],  // parent box bottom
         [parentCX, gapY],      // descend to gap above lower-gen row
@@ -1414,6 +1426,7 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
   return (
     <div className="p-8 min-h-full">
       <svg
+        ref={svgRef}
         width={canvasWidth}
         height={canvasHeight}
         className="mx-auto bg-white"
@@ -1537,4 +1550,4 @@ export function TreeCanvas({ people, rootPersonId, graphType: _graphType, layout
       </svg>
     </div>
   );
-}
+});
