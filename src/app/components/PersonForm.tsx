@@ -56,7 +56,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
             id="firstName"
             type="text"
             value={formData.firstName}
-            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, firstName: e.target.value })}
             className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
             required
           />
@@ -67,7 +67,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
             id="lastName"
             type="text"
             value={formData.lastName}
-            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, lastName: e.target.value })}
             className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
           />
         </div>
@@ -78,7 +78,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
         <select
           id="gender"
           value={formData.gender || ''}
-          onChange={(e) => setFormData({ ...formData, gender: e.target.value as Person['gender'] || undefined })}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, gender: e.target.value as Person['gender'] || undefined })}
           className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
         >
           <option value="">Not specified</option>
@@ -95,7 +95,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
             id="birthDate"
             type="text"
             value={formData.birthDate}
-            onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, birthDate: e.target.value })}
             className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
             placeholder="1950"
           />
@@ -106,7 +106,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
             id="birthPlace"
             type="text"
             value={formData.birthPlace}
-            onChange={(e) => setFormData({ ...formData, birthPlace: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, birthPlace: e.target.value })}
             className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
             placeholder="City, Country"
           />
@@ -120,7 +120,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
             id="deathDate"
             type="text"
             value={formData.deathDate}
-            onChange={(e) => setFormData({ ...formData, deathDate: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, deathDate: e.target.value })}
             className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
             placeholder="2020"
           />
@@ -131,7 +131,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
             id="deathPlace"
             type="text"
             value={formData.deathPlace}
-            onChange={(e) => setFormData({ ...formData, deathPlace: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, deathPlace: e.target.value })}
             className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
             placeholder="City, Country"
           />
@@ -143,7 +143,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
         <select
           id="father"
           value={formData.fatherId || ''}
-          onChange={(e) => setFormData({ ...formData, fatherId: e.target.value || undefined })}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, fatherId: e.target.value || undefined })}
           className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
         >
           <option value="">None</option>
@@ -160,7 +160,7 @@ export function PersonForm({ person, people, onSave, onCancel, onDelete }: Perso
         <select
           id="mother"
           value={formData.motherId || ''}
-          onChange={(e) => setFormData({ ...formData, motherId: e.target.value || undefined })}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, motherId: e.target.value || undefined })}
           className="w-full px-2 py-1.5 text-sm bg-input-background border border-border rounded"
         >
           <option value="">None</option>

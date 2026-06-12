@@ -1195,17 +1195,30 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
     }
 
     // ── Marriage info label ───────────────────────────────────────────────
-    if (layout.showMarriageInfo && (fatherNode.person.marriageDate || fatherNode.person.marriagePlace)) {
-      const labelX = parentsMidX;
-      const labelY = parentBottomY + layout.textSize + 2;
-      let marriageText = '⚭';
-      if (fatherNode.person.marriageDate) marriageText += ' ' + formatDate(fatherNode.person.marriageDate, layout.dateFormat);
-      if (fatherNode.person.marriagePlace) marriageText += ' in ' + fatherNode.person.marriagePlace;
-      marriageLabels.push(
-        <text key={`marriage-${ck}`} x={labelX} y={labelY} textAnchor="middle" fontSize={layout.textSize - 3} fill="#666" style={{ userSelect: 'none' }}>
-          {marriageText}
-        </text>
-      );
+    if (layout.showMarriageInfo) {
+      // Look up marriage data for this specific couple.
+      // Check father's marriages[] first, then mother's, then legacy flat fields.
+      const f = fatherNode.person;
+      const m = motherNode.person;
+      const fromFather = f.marriages?.find(e => e.spouseId === m.id);
+      const fromMother = m.marriages?.find(e => e.spouseId === f.id);
+      // Prefer whichever entry actually has date or place data
+      const coupleMarriage =
+        (fromFather?.date || fromFather?.place) ? fromFather :
+        (fromMother?.date || fromMother?.place) ? fromMother :
+        null;
+      if (coupleMarriage) {
+        const labelX = parentsMidX;
+        const labelY = parentBottomY + layout.textSize + 2;
+        let marriageText = '⚭';
+        if (coupleMarriage.date)  marriageText += ' ' + formatDate(coupleMarriage.date, layout.dateFormat);
+        if (coupleMarriage.place) marriageText += ' in ' + coupleMarriage.place;
+        marriageLabels.push(
+          <text key={`marriage-${ck}`} x={labelX} y={labelY} textAnchor="middle" fontSize={layout.textSize - 3} fill="#666" style={{ userSelect: 'none' }}>
+            {marriageText}
+          </text>
+        );
+      }
     }
 
     // ── Swap button ───────────────────────────────────────────────────────

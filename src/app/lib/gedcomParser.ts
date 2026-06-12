@@ -283,13 +283,21 @@ export function parseGedcom(content: string): GedcomResult {
     if (fam.husbId && !husbPerson) errors.push(`Ehemann ${fam.husbId} nicht gefunden`);
     if (fam.wifeId && !wifePerson) errors.push(`Ehefrau ${fam.wifeId} nicht gefunden`);
 
-    // Marriage info → stored on the husband (or wife if no husband)
-    if (fam.marr) {
-      const bearer = husbPerson ?? wifePerson;
-      if (bearer) {
-        bearer.marriageDate  = fam.marr.date  || undefined;
-        bearer.marriagePlace = fam.marr.place || undefined;
-      }
+    // Marriage info → store per-spouse in marriages[] on both partners.
+    // We always create an entry when BOTH spouses are known – even if the FAM
+    // record has no MARR tag – so the relationship is explicitly persisted in
+    // the marriages JSONB column (not just inferred from shared children).
+    if (husbPerson && wifePerson) {
+      const mDate  = fam.marr?.date  || undefined;
+      const mPlace = fam.marr?.place || undefined;
+      husbPerson.marriages = [
+        ...(husbPerson.marriages ?? []).filter(m => m.spouseId !== wifePerson.id),
+        { spouseId: wifePerson.id, date: mDate, place: mPlace },
+      ];
+      wifePerson.marriages = [
+        ...(wifePerson.marriages ?? []).filter(m => m.spouseId !== husbPerson.id),
+        { spouseId: husbPerson.id, date: mDate, place: mPlace },
+      ];
     }
 
     // Parent links for children

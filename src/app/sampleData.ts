@@ -1,6 +1,37 @@
-import { FamilyTree, Person, defaultLayoutSettings, SavedView } from './types';
+import { FamilyTree, Marriage, Person, defaultLayoutSettings, SavedView } from './types';
 
-const samplePeople: Person[] = [
+/** Raw person shape used only inside sampleData – still carries legacy flat fields. */
+interface RawPerson extends Omit<Person, 'marriages'> {
+  marriageDate?: string;
+  marriagePlace?: string;
+}
+
+/** Derive proper `marriages` arrays from parent–child links + legacy flat fields. */
+function buildPeople(raw: RawPerson[]): Person[] {
+  // Build a spouse map: for every child that has both parents, link them.
+  const spouseMap = new Map<string, Set<string>>();
+  for (const p of raw) {
+    if (p.fatherId && p.motherId) {
+      if (!spouseMap.has(p.fatherId)) spouseMap.set(p.fatherId, new Set());
+      if (!spouseMap.has(p.motherId)) spouseMap.set(p.motherId, new Set());
+      spouseMap.get(p.fatherId)!.add(p.motherId);
+      spouseMap.get(p.motherId)!.add(p.fatherId);
+    }
+  }
+
+  return raw.map(({ marriageDate, marriagePlace, ...rest }) => {
+    const spouseIds = spouseMap.get(rest.id);
+    if (!spouseIds?.size) return rest;
+    const marriages: Marriage[] = [...spouseIds].map(spouseId => ({
+      spouseId,
+      date: marriageDate,
+      place: marriagePlace,
+    }));
+    return { ...rest, marriages };
+  });
+}
+
+const rawPeople: RawPerson[] = [
   // Generation 0 (root)
   {
     id: '1',
@@ -1685,6 +1716,8 @@ const samplePeople: Person[] = [
     marriagePlace: 'Vitis',
     },
 ];
+
+const samplePeople: Person[] = buildPeople(rawPeople);
 
 const sampleViews: SavedView[] = [
   {

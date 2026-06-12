@@ -26,8 +26,7 @@ create table if not exists people (
   gender         text,
   father_id      text,
   mother_id      text,
-  marriage_date  text,
-  marriage_place text,
+  marriages      jsonb,         -- array of { spouseId, date?, place? }
   primary key (tree_id, id)
 );
 
@@ -58,4 +57,11 @@ create policy "allow_all_people" on people
 
 create policy "allow_all_saved_views" on saved_views
   for all using (true) with check (true);
+
+
+-- ─────────────────────────────────────────────
+-- Migrations
+-- ─────────────────────────────────────────────
+
+-- (none – use schema.sql on a fresh database)
 

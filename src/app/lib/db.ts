@@ -4,7 +4,7 @@
  */
 
 import { supabase, supabaseAvailable } from './supabase';
-import { FamilyTree, Person, SavedView } from '../types';
+import type { FamilyTree, Marriage, Person, SavedView } from '../types';
 
 // ─── Row ↔ Type mappers ────────────────────────────────────────────────────
 
@@ -31,8 +31,9 @@ function personToRow(p: Person, treeId: string) {
     gender:        p.gender       ?? null,
     father_id:     p.fatherId     ?? null,
     mother_id:     p.motherId     ?? null,
-    marriage_date:  p.marriageDate  ?? null,
-    marriage_place: p.marriagePlace ?? null,
+    // JSONB column: PostgREST requires the value as a JSON string so it can
+    // cast it via text::jsonb.  Sending a native JS array is silently ignored.
+    marriages: p.marriages?.length ? JSON.stringify(p.marriages) : null,
   };
 }
 
@@ -48,8 +49,12 @@ function rowToPerson(row: Record<string, unknown>): Person {
     gender:        (row.gender       as 'male' | 'female' | 'other' | null) ?? undefined,
     fatherId:      (row.father_id    as string | null) ?? undefined,
     motherId:      (row.mother_id    as string | null) ?? undefined,
-    marriageDate:  (row.marriage_date  as string | null) ?? undefined,
-    marriagePlace: (row.marriage_place as string | null) ?? undefined,
+    marriages: (() => {
+      const raw = row.marriages;
+      if (!raw) return undefined;
+      const arr: unknown = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+      return Array.isArray(arr) && arr.length > 0 ? (arr as Marriage[]) : undefined;
+    })(),
   };
 }
 
@@ -159,6 +164,7 @@ export async function upsertTree(tree: FamilyTree, ownerEmail: string): Promise<
 /** Replace all people in a tree (delete old, insert new). */
 export async function replaceTreePeople(treeId: string, people: Person[]): Promise<void> {
   if (!supabaseAvailable) return;
+
 
   const { error: delErr } = await supabase
     .from('people')

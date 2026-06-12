@@ -1,3 +1,10 @@
+/** Marriage data for a specific spouse relationship. */
+export interface Marriage {
+  spouseId: string;
+  date?: string;
+  place?: string;
+}
+
 export interface Person {
   id: string;
   firstName: string;
@@ -9,8 +16,8 @@ export interface Person {
   gender?: 'male' | 'female' | 'other';
   fatherId?: string;
   motherId?: string;
-  marriageDate?: string;
-  marriagePlace?: string;
+  /** Per-spouse marriage data. One entry per known spouse. */
+  marriages?: Marriage[];
 }
 
 export type GraphType = 'ancestor' | 'descendant' | 'hourglass';

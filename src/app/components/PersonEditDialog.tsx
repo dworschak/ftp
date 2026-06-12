@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Person } from '../types';
+import type { Person, Marriage } from '../types';
 import {
   Dialog,
   DialogContent,
@@ -195,6 +195,21 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  /** Update a per-spouse marriage entry inside formData.marriages[]. */
+  const handleMarriageChange = (spouseId: string | undefined, field: keyof Omit<Marriage, 'spouseId'>, value: string | undefined) => {
+    setFormData(prev => {
+      const marriages = [...(prev.marriages ?? [])];
+      const key = spouseId ?? '';
+      const idx = marriages.findIndex(m => m.spouseId === key);
+      if (idx >= 0) {
+        marriages[idx] = { ...marriages[idx], [field]: value || undefined };
+      } else {
+        marriages.push({ spouseId: key, [field]: value || undefined });
+      }
+      return { ...prev, marriages };
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
@@ -347,33 +362,6 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
                   </div>
                 </div>
               </div>
-
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Marriage</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="marriageDate">Date</Label>
-                    <Input
-                      id="marriageDate"
-                      value={formData.marriageDate ?? ''}
-                      onChange={e => handleChange('marriageDate', e.target.value || undefined)}
-                      placeholder="e.g. 1900-06-22"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="marriagePlace">Place</Label>
-                    <Input
-                      id="marriagePlace"
-                      value={formData.marriagePlace ?? ''}
-                      onChange={e => handleChange('marriagePlace', e.target.value || undefined)}
-                      placeholder="e.g. Hamburg"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Displayed on the connection line to the spouse in the tree.
-                </p>
-              </div>
             </TabsContent>
 
             {/* ── Tab 2: Familie ──────────────────────────────────────────── */}
@@ -381,21 +369,21 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
               value="familie"
               className="flex-1 overflow-y-auto px-6 py-4 space-y-6 mt-0 data-[state=inactive]:hidden"
             >
-              {/* Eltern */}
+              {/* Parents */}
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Users className="w-4 h-4 text-muted-foreground" />
-                  Eltern
+                  Parents
                 </h3>
                 <PersonPicker
-                  label="Vater"
+                  label="Father"
                   selectedId={formData.fatherId}
                   people={people}
                   excludeIds={[person.id, ...(formData.motherId ? [formData.motherId] : [])]}
                   onChange={id => handleChange('fatherId', id)}
                 />
                 <PersonPicker
-                  label="Mutter"
+                  label="Mother"
                   selectedId={formData.motherId}
                   people={people}
                   excludeIds={[person.id, ...(formData.fatherId ? [formData.fatherId] : [])]}
@@ -403,16 +391,16 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
                 />
               </section>
 
-              {/* Ehen & Kinder */}
+              {/* Marriages & Children */}
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Baby className="w-4 h-4 text-muted-foreground" />
-                  Ehen &amp; Kinder
+                  Marriages &amp; Children
                 </h3>
 
                 {spouseGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Keine Kinder in der Datenbank gefunden.
+                    No children found in the database.
                   </p>
                 ) : (
                   <div className="space-y-3">
@@ -424,19 +412,46 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
                         {/* Ehepartner-Header */}
                         <div className="px-3 py-2 bg-muted/30 border-b border-border">
                           <p className="text-xs font-medium text-muted-foreground mb-1.5">
-                            Ehepartner
+                            Spouse
                           </p>
                           {group.spouse ? (
                             <PersonCard person={group.spouse} />
                           ) : (
-                            <p className="text-sm text-muted-foreground italic">Unbekannt</p>
+                            <p className="text-sm text-muted-foreground italic">Unknown</p>
                           )}
                         </div>
 
-                        {/* Kinder */}
+                        {/* Marriage date/place for this couple */}
+                        <div className="px-3 py-2.5 border-b border-border space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                            ⚭ Marriage
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Date</Label>
+                              <Input
+                                className="h-8 text-xs"
+                                value={formData.marriages?.find((m: Marriage) => m.spouseId === (group.spouseId ?? ''))?.date ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleMarriageChange(group.spouseId, 'date', e.target.value)}
+                                placeholder="e.g. 1900-06-22"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Place</Label>
+                              <Input
+                                className="h-8 text-xs"
+                                value={formData.marriages?.find((m: Marriage) => m.spouseId === (group.spouseId ?? ''))?.place ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleMarriageChange(group.spouseId, 'place', e.target.value)}
+                                placeholder="e.g. Hamburg"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Children */}
                         <div className="px-3 py-2.5 space-y-1.5">
                           <p className="text-xs font-medium text-muted-foreground">
-                            Kinder ({group.children.length})
+                            Children ({group.children.length})
                           </p>
                           {group.children
                             .slice()

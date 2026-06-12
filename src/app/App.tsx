@@ -157,15 +157,41 @@ export default function App() {
   // ── Person edits ──────────────────────────────────────────────────────────
   const handlePersonEdit = (person: Person) => {
     if (!currentTreeId) return;
+    const updatedAt = new Date().toISOString();
+    const currentTree = trees.find((t) => t.id === currentTreeId);
+
+    // Build the set of people that need to be persisted.
+    // The edited person always goes in; additionally we mirror every marriage
+    // entry bidirectionally so both spouses always carry the same date/place.
+    const toUpdate = new Map<string, Person>([[person.id, person]]);
+
+    if (currentTree) {
+      for (const m of (person.marriages ?? [])) {
+        if (!m.spouseId) continue;
+        const spouse = currentTree.people.find((p) => p.id === m.spouseId);
+        if (!spouse) continue;
+        const mirrored: Person = {
+          ...spouse,
+          marriages: [
+            ...(spouse.marriages ?? []).filter((sm) => sm.spouseId !== person.id),
+            { spouseId: person.id, date: m.date, place: m.place },
+          ],
+        };
+        toUpdate.set(spouse.id, mirrored);
+      }
+    }
+
     setTrees(trees.map((tree) => {
       if (tree.id !== currentTreeId) return tree;
       return {
         ...tree,
-        people: tree.people.map((p) => (p.id === person.id ? person : p)),
-        updatedAt: new Date().toISOString(),
+        people: tree.people.map((p) => toUpdate.get(p.id) ?? p),
+        updatedAt,
       };
     }));
-    db.upsertPerson(person, currentTreeId).catch(console.error);
+
+    Promise.all([...toUpdate.values()].map((p) => db.upsertPerson(p, currentTreeId)))
+      .catch(console.error);
   };
 
   // ── GEDCOM upload ─────────────────────────────────────────────────────────
@@ -184,14 +210,9 @@ export default function App() {
       ),
     );
 
-    // Persist to Supabase (throws on error → dialog shows it)
-    await db.replaceTreePeople(currentTreeId, people);
 
-    // Keep tree meta up-to-date
-    const currentTree = trees.find((t) => t.id === currentTreeId);
-    if (currentTree) {
-      await db.upsertTree({ ...currentTree, people, updatedAt }, userEmail);
-    }
+    // Persist people to Supabase (throws on error → dialog shows it)
+    await db.replaceTreePeople(currentTreeId, people);
   };
 
   // ── Navigation helpers ────────────────────────────────────────────────────
