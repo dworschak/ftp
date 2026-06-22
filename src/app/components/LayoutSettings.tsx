@@ -130,6 +130,11 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
               label="Marriage info on connecting lines"
             />
             <CheckRow
+              checked={layout.showOccupation ?? false}
+              onChange={(v) => set('showOccupation', v)}
+              label="Occupation"
+            />
+            <CheckRow
               checked={layout.showGenderSymbol ?? false}
               onChange={(v) => set('showGenderSymbol', v)}
               label="Gender symbol (♂/♀) on person tiles"

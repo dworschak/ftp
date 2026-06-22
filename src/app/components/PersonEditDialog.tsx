@@ -362,6 +362,41 @@ export function PersonEditDialog({ person, people, open, onClose, onSave }: Pers
                   </div>
                 </div>
               </div>
+
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Occupation</p>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="occupation">Profession</Label>
+                    <Input
+                      id="occupation"
+                      value={formData.occupation ?? ''}
+                      onChange={e => handleChange('occupation', e.target.value || undefined)}
+                      placeholder="e.g. Baker"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="occupationFrom">From</Label>
+                      <Input
+                        id="occupationFrom"
+                        value={formData.occupationFrom ?? ''}
+                        onChange={e => handleChange('occupationFrom', e.target.value || undefined)}
+                        placeholder="e.g. 1900"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="occupationTo">To</Label>
+                      <Input
+                        id="occupationTo"
+                        value={formData.occupationTo ?? ''}
+                        onChange={e => handleChange('occupationTo', e.target.value || undefined)}
+                        placeholder="e.g. 1925"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </TabsContent>
 
             {/* ── Tab 2: Familie ──────────────────────────────────────────── */}

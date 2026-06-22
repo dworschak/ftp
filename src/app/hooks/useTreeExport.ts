@@ -156,13 +156,13 @@ export function useTreeExport(
 
 /**
  * Characters outside the WinAnsiEncoding of standard PDF fonts (Helvetica/Times)
- * produce garbage glyphs in svg2pdf.js.  Mapping to plain ASCII fallbacks.
+ * produce garbage glyphs in svg2pdf.js.  Two layers:
  *
- * Why each glyph breaks:
- *   ⚭ U+26AD – "MARRIAGE SYMBOL"  → not in any standard PDF font → replace with "oo"
- *   ♂ U+2642 – "MALE SIGN"        → not in Helvetica WinAnsi    → replace with "M"
- *   ♀ U+2640 – "FEMALE SIGN"      → not in Helvetica WinAnsi    → replace with "F"
- *   ⇄ U+21C4 – "LEFT RIGHT ARROW" → UI swap button, removed below
+ * 1. PDF_GLYPH_MAP – special Unicode symbols with no Latin equivalent.
+ * 2. PDF_DIACRITIC_MAP – Central/Eastern European diacritics not in Windows-1252
+ *    (U+0100 and above) transliterated to their ASCII base letter.
+ *    Note: German umlauts (ä ö ü), acute/grave Latin-1 chars (á é ó …) ARE in
+ *    Windows-1252 and do NOT need mapping.
  */
 const PDF_GLYPH_MAP: [string, string][] = [
   ['\u26AD', 'oo'],  // ⚭ marriage
@@ -170,6 +170,46 @@ const PDF_GLYPH_MAP: [string, string][] = [
   ['\u2640',  'F'],  // ♀ female
   ['\u21C4', '<>'],  // ⇄ swap arrow (UI element – also removed below)
 ];
+
+/**
+ * Diacritics above U+00FF that are NOT in WinAnsiEncoding.
+ * Keys are Unicode characters; values are the ASCII fallback.
+ * Covers Czech, Slovak, Polish, Hungarian, Romanian, Croatian and
+ * other Latin-Extended-A/B characters that appear in Central-European names.
+ */
+const PDF_DIACRITIC_MAP: Record<string, string> = {
+  // Czech / Slovak specific (Latin Extended-A)
+  'Ā': 'A', 'ā': 'a', 'Ă': 'A', 'ă': 'a', 'Ą': 'A', 'ą': 'a',
+  'Ć': 'C', 'ć': 'c', 'Ĉ': 'C', 'ĉ': 'c', 'Ċ': 'C', 'ċ': 'c',
+  'Č': 'C', 'č': 'c',
+  'Ď': 'D', 'ď': 'd', 'Đ': 'D', 'đ': 'd',
+  'Ē': 'E', 'ē': 'e', 'Ĕ': 'E', 'ĕ': 'e', 'Ė': 'E', 'ė': 'e',
+  'Ę': 'E', 'ę': 'e', 'Ě': 'E', 'ě': 'e',
+  'Ĝ': 'G', 'ĝ': 'g', 'Ğ': 'G', 'ğ': 'g', 'Ġ': 'G', 'ġ': 'g', 'Ģ': 'G', 'ģ': 'g',
+  'Ĥ': 'H', 'ĥ': 'h', 'Ħ': 'H', 'ħ': 'h',
+  'Ĩ': 'I', 'ĩ': 'i', 'Ī': 'I', 'ī': 'i', 'Ĭ': 'I', 'ĭ': 'i',
+  'Į': 'I', 'į': 'i', 'İ': 'I', 'ı': 'i',
+  'Ĵ': 'J', 'ĵ': 'j',
+  'Ķ': 'K', 'ķ': 'k', 'ĸ': 'k',
+  'Ĺ': 'L', 'ĺ': 'l', 'Ļ': 'L', 'ļ': 'l', 'Ľ': 'L', 'ľ': 'l', 'Ŀ': 'L', 'ŀ': 'l', 'Ł': 'L', 'ł': 'l',
+  'Ń': 'N', 'ń': 'n', 'Ņ': 'N', 'ņ': 'n', 'Ň': 'N', 'ň': 'n', 'ŉ': 'n', 'Ŋ': 'N', 'ŋ': 'n',
+  'Ō': 'O', 'ō': 'o', 'Ŏ': 'O', 'ŏ': 'o', 'Ő': 'O', 'ő': 'o',
+  'Ŕ': 'R', 'ŕ': 'r', 'Ŗ': 'R', 'ŗ': 'r', 'Ř': 'R', 'ř': 'r',
+  'Ś': 'S', 'ś': 's', 'Ŝ': 'S', 'ŝ': 's', 'Ş': 'S', 'ş': 's',
+  // Š/š are in Windows-1252 (0x8A/0x9A) but may fail in some PDF viewers – map for safety
+  'Š': 'S', 'š': 's',
+  'Ţ': 'T', 'ţ': 't', 'Ť': 'T', 'ť': 't', 'Ŧ': 'T', 'ŧ': 't',
+  'Ũ': 'U', 'ũ': 'u', 'Ū': 'U', 'ū': 'u', 'Ŭ': 'U', 'ŭ': 'u',
+  'Ů': 'U', 'ů': 'u', 'Ű': 'U', 'ű': 'u', 'Ų': 'U', 'ų': 'u',
+  'Ŵ': 'W', 'ŵ': 'w',
+  'Ŷ': 'Y', 'ŷ': 'y', 'Ÿ': 'Y',
+  'Ź': 'Z', 'ź': 'z', 'Ż': 'Z', 'ż': 'z',
+  // Ž/ž are in Windows-1252 (0x8E/0x9E) but map for safety
+  'Ž': 'Z', 'ž': 'z',
+  // Romanian comma-below variants (not in Windows-1252)
+  'Ș': 'S', 'ș': 's', 'Ț': 'T', 'ț': 't',
+  // Croatian Đ already covered above
+};
 
 /**
  * Returns a deep clone of `svg` with all known svg2pdf.js rendering issues fixed:
@@ -194,15 +234,22 @@ function prepareSvgForPdf(svg: SVGSVGElement, svgWidth: number, svgHeight: numbe
   clone.setAttribute('xmlns',       'http://www.w3.org/2000/svg');
   clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
 
-  // 2. Walk every text node and replace unsupported Unicode characters
+  // 2. Walk every text node and replace unsupported Unicode characters.
+  //    First apply the glyph map (special symbols), then the diacritic map
+  //    (Central/Eastern European letters not in WinAnsiEncoding).
   const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
   const patches: [Text, string][] = [];
   let n = walker.nextNode();
   while (n) {
     const orig = (n as Text).textContent ?? '';
     let updated = orig;
+    // Symbol replacements (multi-char targets)
     for (const [from, to] of PDF_GLYPH_MAP) {
       if (updated.includes(from)) updated = updated.split(from).join(to);
+    }
+    // Diacritic transliteration (single-char targets, char-by-char)
+    if (/[\u0100-\u024F]/.test(updated)) {
+      updated = updated.replace(/[\u0100-\u024F]/g, ch => PDF_DIACRITIC_MAP[ch] ?? ch);
     }
     if (updated !== orig) patches.push([n as Text, updated]);
     n = walker.nextNode();
@@ -236,6 +283,35 @@ function prepareSvgForPdf(svg: SVGSVGElement, svgWidth: number, svgHeight: numbe
       .trim();
     if (cleaned) el.setAttribute('style', cleaned);
     else el.removeAttribute('style');
+  });
+
+  // 6. Convert <line> elements to <path> elements.
+  //    svg2pdf.js handles <path> more reliably than <line> for colored strokes.
+  clone.querySelectorAll('line').forEach(line => {
+    const x1 = line.getAttribute('x1') ?? '0';
+    const y1 = line.getAttribute('y1') ?? '0';
+    const x2 = line.getAttribute('x2') ?? '0';
+    const y2 = line.getAttribute('y2') ?? '0';
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${x1} ${y1} L ${x2} ${y2}`);
+    // Copy all presentation attributes except the positional ones
+    for (const attr of Array.from(line.attributes)) {
+      if (!['x1', 'y1', 'x2', 'y2'].includes(attr.name)) {
+        path.setAttribute(attr.name, attr.value);
+      }
+    }
+    // Lines never have a fill area – ensure fill is explicitly none
+    path.setAttribute('fill', 'none');
+    line.parentNode?.replaceChild(path, line);
+  });
+
+  // 7. Ensure every stroke-only <path> has an explicit fill="none".
+  //    Without this, svg2pdf.js may apply the SVG default fill (black) and
+  //    paint the path as a filled shape instead of a stroked line.
+  clone.querySelectorAll('path').forEach(path => {
+    if (!path.hasAttribute('fill') && path.hasAttribute('stroke')) {
+      path.setAttribute('fill', 'none');
+    }
   });
 
   return clone;

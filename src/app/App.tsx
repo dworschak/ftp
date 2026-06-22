@@ -42,6 +42,7 @@ export default function App() {
                 ...v.layout,
                 maxGenerations: v.layout.maxGenerations ?? defaultLayoutSettings.maxGenerations,
                 showMarriageInfo: v.layout.showMarriageInfo ?? defaultLayoutSettings.showMarriageInfo,
+                showOccupation: v.layout.showOccupation ?? defaultLayoutSettings.showOccupation,
                 dateFormat: v.layout.dateFormat ?? defaultLayoutSettings.dateFormat,
                 lineStyle: v.layout.lineStyle ?? defaultLayoutSettings.lineStyle,
                 lineWidth: v.layout.lineWidth ?? defaultLayoutSettings.lineWidth,

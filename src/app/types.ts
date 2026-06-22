@@ -16,6 +16,12 @@ export interface Person {
   gender?: 'male' | 'female' | 'other';
   fatherId?: string;
   motherId?: string;
+  /** Occupation / profession. */
+  occupation?: string;
+  /** Optional start of the occupation period (free text, e.g. a year). */
+  occupationFrom?: string;
+  /** Optional end of the occupation period (free text, e.g. a year). */
+  occupationTo?: string;
   /** Per-spouse marriage data. One entry per known spouse. */
   marriages?: Marriage[];
 }
@@ -34,6 +40,7 @@ export interface LayoutSettings {
   showDeathDate: boolean;
   showDeathPlace: boolean;
   showMarriageInfo: boolean;
+  showOccupation: boolean;
   marginTop: number;
   marginRight: number;
   marginBottom: number;
@@ -85,6 +92,7 @@ export const defaultLayoutSettings: LayoutSettings = {
   showDeathDate: true,
   showDeathPlace: true,
   showMarriageInfo: true,
+  showOccupation: false,
   marginTop: 20,
   marginRight: 20,
   marginBottom: 20,

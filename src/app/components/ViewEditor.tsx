@@ -230,7 +230,12 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
     setLegendEntries(prev => {
       if (
         prev.length === entries.length &&
-        prev.every((e, i) => e.label === entries[i].label && e.color === entries[i].color)
+        prev.every((e, i) =>
+          e.label === entries[i].label &&
+          e.color === entries[i].color &&
+          e.kekuleNumber === entries[i].kekuleNumber &&
+          e.isUnknown === entries[i].isUnknown
+        )
       ) return prev; // identical – bail out, no re-render
       return entries;
     });
@@ -596,7 +601,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
 
           {/* Legend overlay – shown when showLegend is enabled */}
           {layout.showLegend && legendEntries.length > 0 && layout.colorScheme !== 'uniform' && (
-            <div className="absolute top-3 right-3 bg-background/95 border border-border rounded-lg shadow-md p-3 print:block pointer-events-none select-none z-10 max-w-[220px]">
+            <div className="absolute top-3 right-3 bg-background/95 border border-border rounded-lg shadow-md p-3 print:block pointer-events-none select-none z-10 max-w-[240px]">
               <div className="text-xs font-semibold text-foreground mb-2 uppercase tracking-wide">
                 {layout.colorScheme === 'by-parish' && 'Parish'}
                 {layout.colorScheme === 'by-grandparent' && 'Grandparent'}
@@ -604,12 +609,19 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
               </div>
               <ul className="space-y-1">
                 {legendEntries.map((entry) => (
-                  <li key={entry.label} className="flex items-center gap-2">
+                  <li key={entry.kekuleNumber ?? entry.label} className="flex items-center gap-1.5">
                     <span
                       className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0 border border-black/10"
                       style={{ backgroundColor: entry.color }}
                     />
-                    <span className="text-xs text-foreground leading-tight">{entry.label}</span>
+                    {entry.kekuleNumber !== undefined && (
+                      <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0 w-5 text-right leading-tight">
+                        {entry.kekuleNumber}
+                      </span>
+                    )}
+                    <span className={`text-xs leading-tight ${entry.isUnknown ? 'text-muted-foreground italic' : 'text-foreground'}`}>
+                      {entry.label}
+                    </span>
                   </li>
                 ))}
               </ul>

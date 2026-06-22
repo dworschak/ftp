@@ -2,6 +2,19 @@ import { Person, LayoutSettings, GraphType, BackgroundSkin } from '../types';
 import { ReactElement, forwardRef } from 'react';
 import { formatDate } from '../utils/dateFormat';
 
+/** Build the occupation display string (with optional period), or null. */
+function buildOccupationText(person: Person): string | null {
+  const occ = person.occupation?.trim();
+  if (!occ) return null;
+  const from = person.occupationFrom?.trim();
+  const to = person.occupationTo?.trim();
+  let range = '';
+  if (from && to) range = ` (${from}–${to})`;
+  else if (from) range = ` (${from}–)`;
+  else if (to) range = ` (–${to})`;
+  return `⚒ ${occ}${range}`;
+}
+
 /** A person box in pixel coordinates – used by the minimap. */
 export interface PixelNode {
   x: number;
@@ -15,6 +28,10 @@ export interface PixelNode {
 export interface LegendEntry {
   label: string;
   color: string;
+  /** Ahnentafel / Kekulé number (4–7 for grandparents, 8–15 for great-grandparents). */
+  kekuleNumber?: number;
+  /** True when this ancestor slot has no known person in the people array. */
+  isUnknown?: boolean;
 }
 
 interface TreeCanvasProps {
@@ -120,6 +137,11 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
       lines.push(person.deathPlace);
     }
 
+    if (layout.showOccupation) {
+      const occ = buildOccupationText(person);
+      if (occ) lines.push(occ);
+    }
+
     let maxWidth = 0;
     lines.forEach((line, index) => {
       const fontWeight = index === 1 ? '500' : 'normal';
@@ -137,64 +159,60 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
   const nodeMap = new Map<string, TreeNode>();
   const subtreeRoots = new Map<string, string>();
 
-  // Determine grandparents and great-grandparents for color coding
-  const grandparents: string[] = [];
-  const greatGrandparents: string[] = [];
+  // Determine grandparents and great-grandparents for color coding.
+  // We use FIXED SLOT arrays (4 slots for grandparents, 8 for great-grandparents)
+  // so that the slot index always maps to a consistent Kekulé number and
+  // subtree color regardless of how many ancestors are known.
+  //   gpFixed[0] = pgf (Kekulé 4)  gpFixed[1] = pgm (Kekulé 5)
+  //   gpFixed[2] = mgf (Kekulé 6)  gpFixed[3] = mgm (Kekulé 7)
+  //   ggpFixed[0..7] = Kekulé 8–15 in left-to-right DFS order
+  const gpFixed:  (string | null)[] = [null, null, null, null];
+  const ggpFixed: (string | null)[] = [null, null, null, null, null, null, null, null];
+  // O(1) personId → slot-index maps (only populated for KNOWN ancestors)
+  const gpSlotIndex  = new Map<string, number>();
+  const ggpSlotIndex = new Map<string, number>();
 
   if (layout.colorScheme !== 'uniform') {
     const father = rootPerson.fatherId ? people.find(p => p.id === rootPerson.fatherId) : null;
     const mother = rootPerson.motherId ? people.find(p => p.id === rootPerson.motherId) : null;
 
-    if (father) {
-      const pgf = father.fatherId ? people.find(p => p.id === father.fatherId) : null;
-      const pgm = father.motherId ? people.find(p => p.id === father.motherId) : null;
-      if (pgf) grandparents.push(pgf.id);
-      if (pgm) grandparents.push(pgm.id);
+    const pgf = father ? (father.fatherId ? people.find(p => p.id === father.fatherId) : null) : null;
+    const pgm = father ? (father.motherId ? people.find(p => p.id === father.motherId) : null) : null;
+    const mgf = mother ? (mother.fatherId ? people.find(p => p.id === mother.fatherId) : null) : null;
+    const mgm = mother ? (mother.motherId ? people.find(p => p.id === mother.motherId) : null) : null;
 
-      if (layout.colorScheme === 'by-great-grandparent') {
-        if (pgf) {
-          const ggf1 = pgf.fatherId ? people.find(p => p.id === pgf.fatherId) : null;
-          const ggm1 = pgf.motherId ? people.find(p => p.id === pgf.motherId) : null;
-          if (ggf1) greatGrandparents.push(ggf1.id);
-          if (ggm1) greatGrandparents.push(ggm1.id);
-        }
-        if (pgm) {
-          const ggf2 = pgm.fatherId ? people.find(p => p.id === pgm.fatherId) : null;
-          const ggm2 = pgm.motherId ? people.find(p => p.id === pgm.motherId) : null;
-          if (ggf2) greatGrandparents.push(ggf2.id);
-          if (ggm2) greatGrandparents.push(ggm2.id);
-        }
-      }
-    }
+    // Populate grandparent slots
+    [pgf, pgm, mgf, mgm].forEach((gp, slot) => {
+      if (gp) { gpFixed[slot] = gp.id; gpSlotIndex.set(gp.id, slot); }
+    });
 
-    if (mother) {
-      const mgf = mother.fatherId ? people.find(p => p.id === mother.fatherId) : null;
-      const mgm = mother.motherId ? people.find(p => p.id === mother.motherId) : null;
-      if (mgf) grandparents.push(mgf.id);
-      if (mgm) grandparents.push(mgm.id);
-
-      if (layout.colorScheme === 'by-great-grandparent') {
-        if (mgf) {
-          const ggf3 = mgf.fatherId ? people.find(p => p.id === mgf.fatherId) : null;
-          const ggm3 = mgf.motherId ? people.find(p => p.id === mgf.motherId) : null;
-          if (ggf3) greatGrandparents.push(ggf3.id);
-          if (ggm3) greatGrandparents.push(ggm3.id);
-        }
-        if (mgm) {
-          const ggf4 = mgm.fatherId ? people.find(p => p.id === mgm.fatherId) : null;
-          const ggm4 = mgm.motherId ? people.find(p => p.id === mgm.motherId) : null;
-          if (ggf4) greatGrandparents.push(ggf4.id);
-          if (ggm4) greatGrandparents.push(ggm4.id);
-        }
-      }
+    if (layout.colorScheme === 'by-great-grandparent') {
+      // Great-grandparent slots: [pgf.f, pgf.m, pgm.f, pgm.m, mgf.f, mgf.m, mgm.f, mgm.m]
+      const ggpSources: [gp: typeof pgf, fSlot: number, mSlot: number][] = [
+        [pgf, 0, 1],
+        [pgm, 2, 3],
+        [mgf, 4, 5],
+        [mgm, 6, 7],
+      ];
+      ggpSources.forEach(([gp, fSlot, mSlot]) => {
+        if (!gp) return;
+        const ggf = gp.fatherId ? people.find(p => p.id === gp.fatherId) : null;
+        const ggm = gp.motherId ? people.find(p => p.id === gp.motherId) : null;
+        if (ggf) { ggpFixed[fSlot] = ggf.id; ggpSlotIndex.set(ggf.id, fSlot); }
+        if (ggm) { ggpFixed[mSlot] = ggm.id; ggpSlotIndex.set(ggm.id, mSlot); }
+      });
     }
   }
 
+  // Legacy compact arrays kept for backward-compat with assignSubtreeRoot helper
+  // (values are the IDs of known ancestors, in slot order, without nulls)
+  // These are intentionally kept unused as named references; the slot Maps are used instead.
+
   // Assign subtree roots
   const assignSubtreeRoot = (personId: string, currentRoot: string | undefined): void => {
-    if (layout.colorScheme === 'by-grandparent' && grandparents.includes(personId)) {
+    if (layout.colorScheme === 'by-grandparent' && gpSlotIndex.has(personId)) {
       currentRoot = personId;
-    } else if (layout.colorScheme === 'by-great-grandparent' && greatGrandparents.includes(personId)) {
+    } else if (layout.colorScheme === 'by-great-grandparent' && ggpSlotIndex.has(personId)) {
       currentRoot = personId;
     }
 
@@ -837,10 +855,10 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
     const rootId = node.subtreeRoot || 'root';
 
     if ((layout.colorScheme === 'by-grandparent' || layout.colorScheme === 'by-great-grandparent') && node.generation <= 2) {
-      const targetRoots = layout.colorScheme === 'by-great-grandparent' ? greatGrandparents : grandparents;
-      if (targetRoots.length > 0) {
+      const slotMap = layout.colorScheme === 'by-great-grandparent' ? ggpSlotIndex : gpSlotIndex;
+      if (slotMap.size > 0) {
         // DFS over all ancestors (father first for left-to-right priority) looking for the
-        // first targetRoot.  This handles illegitimate children who have no father but whose
+        // first slotMap entry.  This handles illegitimate children who have no father but whose
         // mother's line leads to a great-grandparent.
         const findTargetRoot = (personId: string, seen: Set<string>): number => {
           if (seen.has(personId)) return -1;
@@ -849,8 +867,8 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
           if (!p) return -1;
           for (const parentId of [p.fatherId, p.motherId]) {
             if (!parentId) continue;
-            const idx = targetRoots.indexOf(parentId);
-            if (idx !== -1) return idx;
+            const slotIdx = slotMap.get(parentId);
+            if (slotIdx !== undefined) return slotIdx;
             const deeper = findTargetRoot(parentId, seen);
             if (deeper !== -1) return deeper;
           }
@@ -866,8 +884,8 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
       return 'white';
     }
 
-    const colorRoots = layout.colorScheme === 'by-grandparent' ? grandparents : greatGrandparents;
-    const index = colorRoots.indexOf(rootId);
+    const slotMap = layout.colorScheme === 'by-grandparent' ? gpSlotIndex : ggpSlotIndex;
+    const index = slotMap.get(rootId) ?? -1;
     if (index === -1) {
       return 'white';
     }
@@ -1419,17 +1437,25 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
         });
         // already sorted alphabetically since parishColorMap was built from sorted parishes
       } else if (layout.colorScheme === 'by-grandparent') {
-        grandparents.forEach((id, idx) => {
-          const person = people.find(p => p.id === id);
+        // Always emit all 4 grandparent slots (Kekulé 4–7) so unknown slots are visible
+        gpFixed.forEach((id, slotIdx) => {
+          const kekuleNumber = 4 + slotIdx;
+          const person = id ? people.find(p => p.id === id) : null;
           if (person) {
-            entries.push({ label: `${person.firstName} ${person.lastName}`, color: subtreeColors[idx % subtreeColors.length] });
+            entries.push({ label: `${person.firstName} ${person.lastName}`, color: subtreeColors[slotIdx % subtreeColors.length], kekuleNumber });
+          } else {
+            entries.push({ label: 'Unknown', color: '#d1d5db', kekuleNumber, isUnknown: true });
           }
         });
       } else if (layout.colorScheme === 'by-great-grandparent') {
-        greatGrandparents.forEach((id, idx) => {
-          const person = people.find(p => p.id === id);
+        // Always emit all 8 great-grandparent slots (Kekulé 8–15) so unknown slots are visible
+        ggpFixed.forEach((id, slotIdx) => {
+          const kekuleNumber = 8 + slotIdx;
+          const person = id ? people.find(p => p.id === id) : null;
           if (person) {
-            entries.push({ label: `${person.firstName} ${person.lastName}`, color: subtreeColors[idx % subtreeColors.length] });
+            entries.push({ label: `${person.firstName} ${person.lastName}`, color: subtreeColors[slotIdx % subtreeColors.length], kekuleNumber });
+          } else {
+            entries.push({ label: 'Unknown', color: '#d1d5db', kekuleNumber, isUnknown: true });
           }
         });
       }
@@ -1553,6 +1579,18 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
                       {node.person.deathPlace}
                     </text>
                   );
+                  currentY += ts + sg;
+                }
+
+                if (layout.showOccupation) {
+                  const occ = buildOccupationText(node.person);
+                  if (occ) {
+                    elements.push(
+                      <text key="occupation" x={x + node.width / 2} y={currentY} textAnchor="middle" fontSize={ts - 2} fill="#666">
+                        {occ}
+                      </text>
+                    );
+                  }
                 }
 
                 return elements;

@@ -94,6 +94,7 @@ interface GedcomIndividual {
   birth?: { date?: string; place?: string };
   deat?:  { date?: string; place?: string };
   marr?:  { date?: string; place?: string };   // from FAM, injected later
+  occu?:  { value?: string; from?: string; to?: string };
 }
 
 interface GedcomFamily {
@@ -175,6 +176,7 @@ export function parseGedcom(content: string): GedcomResult {
           case 'DEAT': curIndi.deat    = {}; break;
           // MARR on INDI is unusual but handle gracefully
           case 'MARR': curIndi.marr    = {}; break;
+          case 'OCCU': curIndi.occu    = { value: value || undefined }; break;
         }
       } else if (curFam) {
         switch (level1Tag) {
@@ -196,6 +198,19 @@ export function parseGedcom(content: string): GedcomResult {
         } else if (level1Tag === 'DEAT' && curIndi.deat) {
           if (subTag === 'DATE') curIndi.deat.date  = normaliseDate(value);
           if (subTag === 'PLAC') curIndi.deat.place = value;
+        } else if (level1Tag === 'OCCU' && curIndi.occu) {
+          if (subTag === 'DATE') {
+            // Period: "FROM 1900 TO 1925" / "FROM 1900" / "TO 1925" / single date
+            const range = value.match(/^FROM\s+(.+?)(?:\s+TO\s+(.+))?$/i);
+            if (range) {
+              curIndi.occu.from = range[1].trim();
+              if (range[2]) curIndi.occu.to = range[2].trim();
+            } else {
+              const toOnly = value.match(/^TO\s+(.+)$/i);
+              if (toOnly) curIndi.occu.to = toOnly[1].trim();
+              else curIndi.occu.from = value.trim();
+            }
+          }
         }
       } else if (curFam) {
         if (level1Tag === 'MARR') {
@@ -269,6 +284,9 @@ export function parseGedcom(content: string): GedcomResult {
       gender:     indi.sex === 'M' ? 'male'
                 : indi.sex === 'F' ? 'female'
                 : undefined,
+      occupation:     indi.occu?.value || undefined,
+      occupationFrom: indi.occu?.from  || undefined,
+      occupationTo:   indi.occu?.to    || undefined,
     };
 
     personMap.set(xref, person);
