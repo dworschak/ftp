@@ -16,7 +16,7 @@ interface GedcomUploadDialogProps {
   treeName: string;
   onClose: () => void;
   /** Called when the user confirms the import. */
-  onImport: (people: Person[]) => Promise<void>;
+  onImport: (people: Person[], suggestedName?: string) => Promise<void>;
 }
 
 export function GedcomUploadDialog({
@@ -57,7 +57,7 @@ export function GedcomUploadDialog({
     setImporting(true);
     setImportError('');
     try {
-      await onImport(parsed.people);
+      await onImport(parsed.people, parsed.suggestedName);
       handleClose();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
@@ -126,6 +126,12 @@ export function GedcomUploadDialog({
                 <CheckCircle className="w-4 h-4" />
                 File read – ready to import
               </div>
+
+              {parsed.suggestedName && (
+                <p className="text-sm text-muted-foreground">
+                  Tree will be renamed to <strong>{parsed.suggestedName}</strong>
+                </p>
+              )}
 
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <Stat label="People"     value={parsed.stats.individualCount} />

@@ -153,8 +153,11 @@ Im `ViewList`-Screen als Kontextmenü-Option.
 ### 🟢 Tastenkürzel-Übersicht (Keyboard Shortcuts Dialog)
 `?` öffnet ein Overlay, das alle verfügbaren Shortcuts auflistet.
 
-### 🟢 Inline-Umbenennung von Bäumen und Ansichten
+### ✅ Inline-Umbenennung von Bäumen und Ansichten (umgesetzt)
 Name direkt in der Liste per Doppelklick bearbeiten (kein separater Dialog nötig).
+Zusätzlich: Bäume werden beim GEDCOM-Upload automatisch nach dem häufigsten
+Nachnamen benannt (mit Nummerierung bei Namensgleichheit), neue Ansichten
+automatisch nach „Person – Graphtyp" (ebenfalls mit Nummerierung).
 
 ---
 

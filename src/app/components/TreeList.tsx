@@ -1,11 +1,13 @@
+import { useRef, useState } from 'react';
 import { FamilyTree } from '../types';
-import { Plus, Network, Trash2 } from 'lucide-react';
+import { Plus, Network, Trash2, Pencil } from 'lucide-react';
 
 interface TreeListProps {
   trees: FamilyTree[];
   onSelectTree: (treeId: string) => void;
   onCreateTree: () => void;
   onDeleteTree: (treeId: string) => void;
+  onRenameTree: (treeId: string, newName: string) => void;
   onLogout: () => void;
   userEmail: string;
 }
@@ -15,9 +17,33 @@ export function TreeList({
   onSelectTree,
   onCreateTree,
   onDeleteTree,
+  onRenameTree,
   onLogout,
   userEmail
 }: TreeListProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  // Delay single-click navigation briefly so a double-click can cancel it and
+  // start inline editing instead of opening the tree.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCardClick = (treeId: string) => {
+    if (editingId) return; // ignore navigation while renaming
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => onSelectTree(treeId), 200);
+  };
+
+  const startEdit = (tree: FamilyTree) => {
+    if (clickTimer.current) { clearTimeout(clickTimer.current); clickTimer.current = null; }
+    setEditingId(tree.id);
+    setDraft(tree.name);
+  };
+
+  const commitEdit = () => {
+    if (editingId && draft.trim()) onRenameTree(editingId, draft.trim());
+    setEditingId(null);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b border-border">
@@ -67,19 +93,52 @@ export function TreeList({
               <div
                 key={tree.id}
                 className="border border-border rounded-lg p-4 hover:border-foreground/20 transition-colors cursor-pointer group"
-                onClick={() => onSelectTree(tree.id)}
+                onClick={() => handleCardClick(tree.id)}
               >
                 <div className="flex items-start justify-between mb-2">
-                  <h3>{tree.name}</h3>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTree(tree.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {editingId === tree.id ? (
+                    <input
+                      autoFocus
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onBlur={commitEdit}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                        else if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
+                      }}
+                      className="flex-1 mr-2 bg-input-background border border-border rounded px-2 py-1 text-base font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  ) : (
+                    <h3
+                      className="flex-1"
+                      title="Double-click to rename"
+                      onDoubleClick={(e) => { e.stopPropagation(); startEdit(tree); }}
+                    >
+                      {tree.name}
+                    </h3>
+                  )}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {editingId !== tree.id && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); startEdit(tree); }}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Rename"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteTree(tree.id);
+                      }}
+                      className="text-muted-foreground hover:text-destructive"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {tree.people.length} {tree.people.length === 1 ? 'person' : 'people'}

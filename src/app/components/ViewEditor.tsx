@@ -6,6 +6,7 @@ import { TreeCanvas, PixelNode, LegendEntry } from './TreeCanvas';
 import { TreeMiniMap } from './TreeMiniMap';
 import { PersonEditDialog } from './PersonEditDialog';
 import { useTreeExport } from '../hooks/useTreeExport';
+import { graphTypeLabel, makeUniqueName } from '../utils/naming';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -24,6 +25,9 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
   const [name, setName] = useState(view?.name || 'New View');
   const [rootPersonId, setRootPersonId] = useState(view?.rootPersonId || (tree.people[0]?.id || ''));
   const [graphType, setGraphType] = useState<GraphType>(view?.graphType || 'ancestor');
+  // For existing views we keep the saved name; for new views the name is
+  // auto-generated from the root person + graph type until the user edits it.
+  const [nameEdited, setNameEdited] = useState(!!view);
   const [layout, setLayout] = useState({
     ...defaultLayoutSettings,
     ...(view?.layout || {}),
@@ -254,7 +258,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
   const handleSave = () => {
     const savedView: SavedView = {
       id: view?.id || Date.now().toString(),
-      name,
+      name: name.trim() || buildAutoViewName(rootPersonId, graphType),
       rootPersonId,
       graphType,
       layout,
@@ -294,6 +298,22 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
   const handleZoomOut = () => setZoom(z => Math.max(+(z - 0.1).toFixed(2), 0.1));
   const handleZoomReset = () => setZoom(1);
 
+  /** Build a unique auto name like "Anna Müller – Ancestors" for the current root/type. */
+  const buildAutoViewName = useCallback((rootId: string, gType: GraphType): string => {
+    const person = tree.people.find(p => p.id === rootId);
+    const base = person
+      ? `${`${person.firstName} ${person.lastName}`.trim()} – ${graphTypeLabel(gType)}`
+      : graphTypeLabel(gType);
+    const existing = tree.savedViews.filter(v => v.id !== view?.id).map(v => v.name);
+    return makeUniqueName(base, existing);
+  }, [tree.people, tree.savedViews, view?.id]);
+
+  // Auto-fill the name from root person + graph type until the user edits it.
+  useEffect(() => {
+    if (nameEdited || !rootPersonId) return;
+    setName(buildAutoViewName(rootPersonId, graphType));
+  }, [rootPersonId, graphType, nameEdited, buildAutoViewName]);
+
   const rootPerson = tree.people.find(p => p.id === rootPersonId);
 
   return (
@@ -308,7 +328,7 @@ export function ViewEditor({ tree, view, onSave, onBack, onPersonEdit }: ViewEdi
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); setNameEdited(true); }}
               className="text-lg font-medium bg-transparent border-none focus:outline-none focus:ring-0 px-0"
               placeholder="View name"
             />

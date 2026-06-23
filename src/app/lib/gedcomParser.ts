@@ -117,6 +117,8 @@ export interface GedcomResult {
   people: Person[];
   stats: GedcomStats;
   errors: string[];
+  /** Tree name extracted from the GEDCOM header (2 _TREE or 1 TITL). */
+  suggestedName?: string;
 }
 
 // ─── Main parser ─────────────────────────────────────────────────────────────
@@ -132,6 +134,9 @@ export function parseGedcom(content: string): GedcomResult {
   let curIndi: GedcomIndividual | null = null;
   let curFam:  GedcomFamily  | null = null;
   let level1Tag = '';  // last encountered level-1 tag (for level-2 sub-tags)
+  let inHead    = false; // true while parsing the HEAD record
+  let headTreeName = ''; // from "2 _TREE …" under "1 SOUR"
+  let headTitle    = ''; // from "1 TITL …"
 
   for (const raw of lines) {
     const line = raw.trim();
@@ -150,6 +155,7 @@ export function parseGedcom(content: string): GedcomResult {
       curIndi = null;
       curFam  = null;
       level1Tag = '';
+      inHead    = false;
 
       // Level-0 with xref: "0 @I001@ INDI" or "0 @F001@ FAM"
       if (tag.startsWith('@')) {
@@ -162,13 +168,18 @@ export function parseGedcom(content: string): GedcomResult {
           curFam = { id: xref, children: [] };
           families.set(xref, curFam);
         }
+      } else if (tag.toUpperCase() === 'HEAD') {
+        inHead = true;
       }
       continue;
     }
 
     if (level === 1) {
       level1Tag = tag.toUpperCase();
-      if (curIndi) {
+      if (inHead) {
+        // Capture plain "1 TITL <value>" as a fallback tree name
+        if (level1Tag === 'TITL' && value) headTitle = value.trim();
+      } else if (curIndi) {
         switch (level1Tag) {
           case 'NAME': curIndi.rawName = value; break;
           case 'SEX':  curIndi.sex     = value.toUpperCase(); break;
@@ -191,7 +202,12 @@ export function parseGedcom(content: string): GedcomResult {
 
     if (level === 2) {
       const subTag = tag.toUpperCase();
-      if (curIndi) {
+      if (inHead) {
+        // "1 SOUR … / 2 _TREE <value>" – Ancestry.com and similar exporters
+        if (level1Tag === 'SOUR' && subTag === '_TREE' && value) {
+          headTreeName = value.trim();
+        }
+      } else if (curIndi) {
         if (level1Tag === 'BIRT' && curIndi.birth) {
           if (subTag === 'DATE') curIndi.birth.date  = normaliseDate(value);
           if (subTag === 'PLAC') curIndi.birth.place = value;
@@ -340,6 +356,6 @@ export function parseGedcom(content: string): GedcomResult {
     marriageCount:   Array.from(families.values()).filter(f => f.marr).length,
   };
 
-  return { people, stats, errors };
+  return { people, stats, errors, suggestedName: headTreeName || headTitle || undefined };
 }
 

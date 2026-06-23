@@ -8,8 +8,12 @@ import { FamilyTree, SavedView, defaultLayoutSettings, Person } from './types';
 import { sampleTree } from './sampleData';
 import * as db from './lib/db';
 import { supabaseAvailable } from './lib/supabase';
+import { deriveSurname, makeUniqueName } from './utils/naming';
 
 type AppView = 'login' | 'treeList' | 'viewList' | 'viewEditor';
+
+/** Matches the auto-generated default tree names so they can be safely replaced. */
+const DEFAULT_TREE_NAME_RE = /^(Family Tree \d+|New Tree)$/i;
 
 export default function App() {
   const [view, setView]                     = useState<AppView>('login');
@@ -121,6 +125,14 @@ export default function App() {
     db.deleteTree(treeId).catch(console.error);
   };
 
+  const handleRenameTree = (treeId: string, rawName: string) => {
+    const name = rawName.trim();
+    if (!name) return;
+    const updatedAt = new Date().toISOString();
+    setTrees((prev) => prev.map((t) => (t.id === treeId ? { ...t, name, updatedAt } : t)));
+    db.updateTreeMeta(treeId, name).catch(console.error);
+  };
+
   // ── View CRUD ─────────────────────────────────────────────────────────────
   const handleCreateView = () => {
     setCurrentViewId(null);
@@ -139,6 +151,25 @@ export default function App() {
       return { ...tree, savedViews: tree.savedViews.filter((v) => v.id !== viewId), updatedAt: new Date().toISOString() };
     }));
     db.deleteView(viewId).catch(console.error);
+  };
+
+  const handleRenameView = (viewId: string, rawName: string) => {
+    if (!currentTreeId) return;
+    const name = rawName.trim();
+    if (!name) return;
+    const tree = trees.find((t) => t.id === currentTreeId);
+    const view = tree?.savedViews.find((v) => v.id === viewId);
+    if (!view) return;
+    const updatedAt = new Date().toISOString();
+    const renamed: SavedView = { ...view, name, updatedAt };
+    setTrees((prev) => prev.map((t) =>
+      t.id !== currentTreeId ? t : {
+        ...t,
+        savedViews: t.savedViews.map((v) => (v.id === viewId ? renamed : v)),
+        updatedAt,
+      },
+    ));
+    db.upsertView(renamed, currentTreeId).catch(console.error);
   };
 
   const handleSaveView = (savedView: SavedView) => {
@@ -198,22 +229,45 @@ export default function App() {
   // ── GEDCOM upload ─────────────────────────────────────────────────────────
   const handleUploadGedcom = () => setGedcomOpen(true);
 
-  const handleGedcomImport = async (people: Person[]) => {
+  const handleGedcomImport = async (people: Person[], suggestedName?: string) => {
     if (!currentTreeId) return;
     const updatedAt = new Date().toISOString();
+    const current = trees.find((t) => t.id === currentTreeId);
+
+    // Determine the best tree name.
+    // Priority: explicit GEDCOM header name (_TREE / TITL) > most-common surname
+    // Either is only applied when the tree still has a generic / default name.
+    let newName = current?.name ?? '';
+    if (current && DEFAULT_TREE_NAME_RE.test(current.name.trim())) {
+      if (suggestedName) {
+        // Use the name from the GEDCOM header directly; make it unique across trees.
+        const others = trees.filter((t) => t.id !== currentTreeId).map((t) => t.name);
+        newName = makeUniqueName(suggestedName, others);
+      } else {
+        const surname = deriveSurname(people);
+        if (surname) {
+          const others = trees.filter((t) => t.id !== currentTreeId).map((t) => t.name);
+          newName = makeUniqueName(surname, others);
+        }
+      }
+    }
 
     // Optimistic local update
     setTrees((prev) =>
       prev.map((tree) =>
         tree.id === currentTreeId
-          ? { ...tree, people, updatedAt }
+          ? { ...tree, name: newName, people, updatedAt }
           : tree,
       ),
     );
 
-
     // Persist people to Supabase (throws on error → dialog shows it)
     await db.replaceTreePeople(currentTreeId, people);
+
+    // Persist the auto-generated name if it changed
+    if (current && newName !== current.name) {
+      db.updateTreeMeta(currentTreeId, newName).catch(console.error);
+    }
   };
 
   // ── Navigation helpers ────────────────────────────────────────────────────
@@ -233,6 +287,7 @@ export default function App() {
           onSelectTree={handleSelectTree}
           onCreateTree={handleCreateTree}
           onDeleteTree={handleDeleteTree}
+          onRenameTree={handleRenameTree}
           onLogout={handleLogout}
           userEmail={userEmail}
         />
@@ -244,6 +299,7 @@ export default function App() {
           onSelectView={handleSelectView}
           onCreateView={handleCreateView}
           onDeleteView={handleDeleteView}
+          onRenameView={handleRenameView}
           onUploadGedcom={handleUploadGedcom}
           onBack={handleBackToTreeList}
           onLogout={handleLogout}

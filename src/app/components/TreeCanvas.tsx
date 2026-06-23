@@ -788,13 +788,6 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
     return last.replace(/\s+\d+$/, '').trim() || null;
   };
 
-  // A birth date qualifies for parish coloring only when it is an exact calendar
-  // day in YYYY-MM-DD format.  Approximate dates like "ca 1780", "1780", or
-  // "1780-06" are treated as unknown and the person is left uncoloured.
-  const hasExactBirthDate = (birthDate: string | undefined): boolean => {
-    if (!birthDate) return false;
-    return /^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim());
-  };
 
   // Generate N visually distinct pastel colors evenly spread around the hue wheel.
   // Saturation 50 % / lightness 80 % matches the feel of the subtreeColors palette
@@ -804,17 +797,37 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
       `hsl(${Math.round((i / count) * 360)}, 50%, 80%)`
     );
 
-  // Build parish → color map from VISIBLE nodes only (allNodes) and only for
-  // persons with an exact birth date (YYYY-MM-DD).  Sorted alphabetically for
-  // a stable, predictable color assignment; each parish gets a unique color –
-  // no palette cycling.
+  // A birth date qualifies for parish coloring only when it is an exact calendar
+  // day in YYYY-MM-DD format.  Approximate dates like "ca 1780", "1780", or
+  // "1780-06" are treated as unknown and the person is left uncoloured.
+  const hasExactBirthDate = (birthDate: string | undefined): boolean => {
+    if (!birthDate) return false;
+    return /^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim());
+  };
+
+
+  // Build parish → color map from VISIBLE nodes only (allNodes).
+  // Birth places (for box colors) are always collected.
+  // Marriage places (for line colors) are only collected when colorLines is enabled,
+  // so that the legend only shows parishes that are actually visible on the canvas.
   const parishColorMap = new Map<string, string>();
   if (layout.colorScheme === 'by-parish') {
     const parishes = new Set<string>();
     allNodes.forEach(node => {
-      if (!hasExactBirthDate(node.person.birthDate)) return;
-      const parish = getParish(node.person.birthPlace);
-      if (parish) parishes.add(parish);
+      if (hasExactBirthDate(node.person.birthDate)) {
+        const p = getParish(node.person.birthPlace);
+        if (p) parishes.add(p);
+      }
+      if (layout.colorLines) {
+        node.person.marriages?.forEach(m => {
+          // Only include a marriage place if the spouse is also rendered on the
+          // canvas – otherwise the colour would appear in the legend but nowhere
+          // on the canvas (e.g. a sibling who married outside the visible tree).
+          if (!nodeMap.has(m.spouseId)) return;
+          const mp = getParish(m.place);
+          if (mp) parishes.add(mp);
+        });
+      }
     });
     const sortedParishes = [...parishes].sort((a, b) => a.localeCompare(b));
     const palette = generateParishPalette(sortedParishes.length);
@@ -898,6 +911,7 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
     // subtree color instead of the uniform borderColor.
     const getLineColor = (childNode: TreeNode): string => {
       if (!layout.colorLines || layout.colorScheme === 'uniform') return layout.borderColor;
+      if (layout.colorScheme === 'by-parish') return layout.borderColor; // fallback; use getCoupleParishLineColor for couples
       const boxColor = getPersonBoxColor(childNode);
       return boxColor === 'white' ? layout.borderColor : boxColor;
     };
@@ -1166,8 +1180,31 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
     const _spineLeft  = isMultiChild ? Math.min(Math.min(...childXs), Math.min(fatherCenterX, motherCenterX)) : parentsMidX; void _spineLeft;
     const _spineRight = isMultiChild ? Math.max(Math.max(...childXs), Math.max(fatherCenterX, motherCenterX)) : parentsMidX; void _spineRight;
 
-    // Line color for this couple: derived from the leftmost child's subtree (or borderColor if uniform)
-    const coupleLineColor = getLineColor(sortedChildren[0]);
+    // Line color for this couple: for by-parish use the couple's own marriage place;
+    // otherwise derived from the leftmost child's subtree color (or borderColor if uniform).
+    // Look up marriage data for this specific couple (reused for line color + label).
+    const f = fatherNode.person;
+    const m = motherNode.person;
+    const fromFather = f.marriages?.find(e => e.spouseId === m.id);
+    const fromMother = m.marriages?.find(e => e.spouseId === f.id);
+    const coupleMarriage =
+      (fromFather?.date || fromFather?.place) ? fromFather :
+      (fromMother?.date || fromMother?.place) ? fromMother :
+      null;
+
+    // Line color for this couple: for by-parish use the couple's own marriage place;
+    // otherwise derived from the leftmost child's subtree color (or borderColor if uniform).
+    const coupleLineColor = (() => {
+      if (layout.colorLines && layout.colorScheme === 'by-parish') {
+        const parish = getParish(coupleMarriage?.place);
+        if (parish) {
+          const color = parishColorMap.get(parish);
+          if (color) return color;
+        }
+        return layout.borderColor;
+      }
+      return getLineColor(sortedChildren[0]);
+    })();
 
     // ── Parent bar (drawn once per couple) ─────────────────────────────────
     // When parents are at the same generation, each drops straight to dropY.
@@ -1214,17 +1251,7 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
 
     // ── Marriage info label ───────────────────────────────────────────────
     if (layout.showMarriageInfo) {
-      // Look up marriage data for this specific couple.
-      // Check father's marriages[] first, then mother's, then legacy flat fields.
-      const f = fatherNode.person;
-      const m = motherNode.person;
-      const fromFather = f.marriages?.find(e => e.spouseId === m.id);
-      const fromMother = m.marriages?.find(e => e.spouseId === f.id);
-      // Prefer whichever entry actually has date or place data
-      const coupleMarriage =
-        (fromFather?.date || fromFather?.place) ? fromFather :
-        (fromMother?.date || fromMother?.place) ? fromMother :
-        null;
+      // coupleMarriage already computed above for line color.
       if (coupleMarriage) {
         const labelX = parentsMidX;
         const labelY = parentBottomY + layout.textSize + 2;
