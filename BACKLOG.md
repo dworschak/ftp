@@ -146,7 +146,7 @@ Im Canvas mehrere Personen per Shift-Klick oder Lasso auswählen und gemeinsam l
 Schaltfläche im `PersonEditDialog`: „Duplicate" – legt eine Kopie mit neuem `id` an.  
 Nützlich bei Namensgleichheit in verschiedenen Generationen.
 
-### 🟡 Ansichten kopieren
+### ✅ Ansichten kopieren (umgesetzt)
 Eine `SavedView` duplizieren, um auf Basis eines bestehenden Layouts eine neue Variante zu erstellen.  
 Im `ViewList`-Screen als Kontextmenü-Option.
 

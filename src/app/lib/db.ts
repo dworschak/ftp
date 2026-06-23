@@ -20,17 +20,20 @@ function treeToRow(tree: FamilyTree, ownerEmail: string) {
 
 function personToRow(p: Person, treeId: string) {
   return {
-    tree_id:       treeId,
-    id:            p.id,
-    first_name:    p.firstName,
-    last_name:     p.lastName,
-    birth_date:    p.birthDate    ?? null,
-    birth_place:   p.birthPlace   ?? null,
-    death_date:    p.deathDate    ?? null,
-    death_place:   p.deathPlace   ?? null,
-    gender:        p.gender       ?? null,
-    father_id:     p.fatherId     ?? null,
-    mother_id:     p.motherId     ?? null,
+    tree_id:          treeId,
+    id:               p.id,
+    first_name:       p.firstName,
+    last_name:        p.lastName,
+    birth_date:       p.birthDate       ?? null,
+    birth_place:      p.birthPlace      ?? null,
+    death_date:       p.deathDate       ?? null,
+    death_place:      p.deathPlace      ?? null,
+    gender:           p.gender          ?? null,
+    father_id:        p.fatherId        ?? null,
+    mother_id:        p.motherId        ?? null,
+    occupation:       p.occupation      ?? null,
+    occupation_from:  p.occupationFrom  ?? null,
+    occupation_to:    p.occupationTo    ?? null,
     // JSONB column: PostgREST requires the value as a JSON string so it can
     // cast it via text::jsonb.  Sending a native JS array is silently ignored.
     marriages: p.marriages?.length ? JSON.stringify(p.marriages) : null,
@@ -39,16 +42,19 @@ function personToRow(p: Person, treeId: string) {
 
 function rowToPerson(row: Record<string, unknown>): Person {
   return {
-    id:            row.id            as string,
-    firstName:     row.first_name    as string,
-    lastName:      row.last_name     as string,
-    birthDate:     (row.birth_date   as string | null) ?? undefined,
-    birthPlace:    (row.birth_place  as string | null) ?? undefined,
-    deathDate:     (row.death_date   as string | null) ?? undefined,
-    deathPlace:    (row.death_place  as string | null) ?? undefined,
-    gender:        (row.gender       as 'male' | 'female' | 'other' | null) ?? undefined,
-    fatherId:      (row.father_id    as string | null) ?? undefined,
-    motherId:      (row.mother_id    as string | null) ?? undefined,
+    id:             row.id            as string,
+    firstName:      row.first_name    as string,
+    lastName:       row.last_name     as string,
+    birthDate:      (row.birth_date   as string | null) ?? undefined,
+    birthPlace:     (row.birth_place  as string | null) ?? undefined,
+    deathDate:      (row.death_date   as string | null) ?? undefined,
+    deathPlace:     (row.death_place  as string | null) ?? undefined,
+    gender:         (row.gender       as 'male' | 'female' | 'other' | null) ?? undefined,
+    fatherId:       (row.father_id    as string | null) ?? undefined,
+    motherId:       (row.mother_id    as string | null) ?? undefined,
+    occupation:     (row.occupation   as string | null) ?? undefined,
+    occupationFrom: (row.occupation_from as string | null) ?? undefined,
+    occupationTo:   (row.occupation_to   as string | null) ?? undefined,
     marriages: (() => {
       const raw = row.marriages;
       if (!raw) return undefined;

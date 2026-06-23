@@ -153,6 +153,30 @@ export default function App() {
     db.deleteView(viewId).catch(console.error);
   };
 
+  const handleDuplicateView = (viewId: string) => {
+    if (!currentTreeId) return;
+    const tree = trees.find((t) => t.id === currentTreeId);
+    const original = tree?.savedViews.find((v) => v.id === viewId);
+    if (!original || !tree) return;
+    const existingNames = tree.savedViews.map((v) => v.name);
+    const now = new Date().toISOString();
+    const duplicate: SavedView = {
+      ...original,
+      id: Date.now().toString(),
+      name: makeUniqueName(`${original.name} (Copy)`, existingNames),
+      createdAt: now,
+      updatedAt: now,
+    };
+    setTrees((prev) => prev.map((t) =>
+      t.id !== currentTreeId ? t : {
+        ...t,
+        savedViews: [...t.savedViews, duplicate],
+        updatedAt: now,
+      },
+    ));
+    db.upsertView(duplicate, currentTreeId).catch(console.error);
+  };
+
   const handleRenameView = (viewId: string, rawName: string) => {
     if (!currentTreeId) return;
     const name = rawName.trim();
@@ -300,6 +324,7 @@ export default function App() {
           onCreateView={handleCreateView}
           onDeleteView={handleDeleteView}
           onRenameView={handleRenameView}
+          onDuplicateView={handleDuplicateView}
           onUploadGedcom={handleUploadGedcom}
           onBack={handleBackToTreeList}
           onLogout={handleLogout}

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { FamilyTree } from '../types';
-import { Plus, Eye, Trash2, Upload, Pencil } from 'lucide-react';
+import { Plus, Eye, Trash2, Upload, Pencil, Copy } from 'lucide-react';
 import { formatDate } from '../utils/dateFormat';
 
 interface ViewListProps {
@@ -9,6 +9,7 @@ interface ViewListProps {
   onCreateView: () => void;
   onDeleteView: (viewId: string) => void;
   onRenameView: (viewId: string, newName: string) => void;
+  onDuplicateView: (viewId: string) => void;
   onUploadGedcom: () => void;
   onBack: () => void;
   onLogout: () => void;
@@ -21,6 +22,7 @@ export function ViewList({
   onCreateView,
   onDeleteView,
   onRenameView,
+  onDuplicateView,
   onUploadGedcom,
   onBack,
   onLogout,
@@ -166,6 +168,13 @@ export function ViewList({
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDuplicateView(view.id); }}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Duplicate"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

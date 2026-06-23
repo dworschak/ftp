@@ -26,6 +26,9 @@ create table if not exists people (
   gender         text,
   father_id      text,
   mother_id      text,
+  occupation     text,
+  occupation_from text,
+  occupation_to  text,
   marriages      jsonb,         -- array of { spouseId, date?, place? }
   primary key (tree_id, id)
 );
@@ -63,5 +66,9 @@ create policy "allow_all_saved_views" on saved_views
 -- Migrations
 -- ─────────────────────────────────────────────
 
--- (none – use schema.sql on a fresh database)
+-- Migration: add occupation columns (run once on existing databases)
+alter table people add column if not exists occupation      text;
+alter table people add column if not exists occupation_from text;
+alter table people add column if not exists occupation_to   text;
+
 
