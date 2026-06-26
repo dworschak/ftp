@@ -60,7 +60,7 @@ Den aktuellen Baum als valide GEDCOM-5.5-Datei exportieren.
 Neue Datei `lib/gedcomExporter.ts` mit Funktion `exportGedcom(tree: FamilyTree): string`.  
 Button im `ViewList`- oder `TreeList`-Screen.
 
-### 🟡 Inkrementeller GEDCOM-Import (Merge statt Replace)
+### ✅ Inkrementeller GEDCOM-Import (Merge statt Replace) - umgesetzt
 Beim erneuten Import wahlweise vorhandene Personen aktualisieren statt den gesamten Baum zu ersetzen.  
 Dialog zeigt Diff: neue Personen, geänderte Felder, entfernte Personen.
 
@@ -264,13 +264,82 @@ Vor dem Ausdruck eine skalierte Vorschau zeigen, die dem Druckergebnis entsprich
 Optionaler Fußzeilen-Text (z. B. Quellenangabe, Datum der Erstellung) der im Druck erscheint.  
 Neues Feld `printFooter?: string` in `LayoutSettings`.
 
-### 🟢 Rahmen- und Dekorations-Themes
-Vordefinierte dekorative Rahmen (Ornamente, historischer Stil) für die Druckausgabe.  
-Als SVG-Dekorationselemente um das Canvas herum.
+### 🟡 Druckmaßstab / Skalierung
+Explizite Skalierungsoption vor dem Druck: „Auf eine Seite einpassen", „50 %", „Originalgröße".  
+Berechnet den CSS-`transform: scale()`-Wert für das SVG und setzt die `@page`-Größe dynamisch.  
+Besonders nützlich für große Bäume, die auf einem einzigen Poster-Format gedruckt werden sollen.
+
+### 🟡 Querformat / Hochformat-Umschalter für Druck
+Explizite `@page { size: landscape }` bzw. `portrait`-Steuerung per Button vor dem Drucken.  
+Ergänzt die bestehende „Spiegelungsoption" aus Abschnitt 3.
+
+### 🟢 Mehrseitige Druckansicht (Poster-Modus)
+Große Bäume auf mehrere DIN-A4/A3-Seiten aufteilen mit Überlappungsmarkierungen.  
+Einstellbare Seitengröße in `LayoutSettings` (`paperSize: 'A4' | 'A3' | 'Letter'`).  
+CSS `@page`-Regeln + `print:` Tailwind-Klassen.
 
 ---
 
-## 10. Statistiken & Analyse
+## 10. Darstellung & visuelle Gestaltung (Druck-Fokus)
+
+### 🔴 Dekorative Seitenrahmen (Ornament Borders)
+Auswählbarer SVG-Rahmen um das gesamte Canvas: einfache Linie, doppelte Linie, florale Ornamente (Ranken), klassisch-historisch (Säulen/Mäander), Art-Deco.  
+Umsetzung: neue Datei `components/CanvasBorder.tsx` rendert ein `<g>` als erstes Kind des SVG.  
+Neues Feld `borderStyle: 'none' | 'simple' | 'double' | 'floral' | 'classical' | 'artdeco'` in `LayoutSettings`.  
+Eckverzierungen und Seitenlinien als parametrierbare SVG-Pfade; Farbe folgt `borderColor`.
+
+### 🔴 Visuelle Themes / Vorlagen
+Ein-Klick-Themes, die mehrere `LayoutSettings`-Felder auf einmal setzen (Schriftgröße, Hintergrund, Rahmen, Farben, Zeilenart).  
+Vorschläge: „Antik" (Cream-Hintergrund, Serifenschrift, florale Ranke), „Modern" (Weiß, schlanke Linien, kein Rahmen), „Standesamt" (weißer Grund, doppelter Rahmen, neutrale Farben), „Aquarell" (Pastelltöne, abgerundete Boxen).  
+Neuer UI-Bereich in `LayoutSettings.tsx` ganz oben; Themes sind reine JSON-Presets, kein eigener Typ nötig.
+
+### 🔴 Titelblock / Überschrift im Canvas
+Konfigurierbarer Textbereich am oberen Rand des SVG: Familienname groß, optional Untertitel (z. B. „Stammbaum der Familie Müller · Stand 2026").  
+Felder in `LayoutSettings`: `titleText?: string`, `titleFontSize: number`, `subtitleText?: string`.  
+Im Canvas als `<text>`-Block gerendert; reserviert automatisch Platz oben und berücksichtigt Rahmen-Offset.
+
+### 🟡 Schriftarten-Auswahl
+Auswahl aus eingebetteten Web-Fonts für Druckqualität: Serif (Playfair Display, IM Fell English), Sans-Serif (Standard), Monospace (historisches Maschinentypen-Feeling).  
+Fonts werden per `<style>` im SVG eingebettet (Google Fonts CDN-`@import` oder Base64) – bleiben daher auch in exportierten SVG/PNG-Dateien erhalten.  
+Neues Feld `fontFamily: 'system' | 'serif' | 'playfair' | 'mono'` in `LayoutSettings`.
+
+### 🟡 Hintergrundtexturen
+Subtile Muster hinter dem gesamten Canvas-Hintergrund: Pergament (feines Korn), Leinen (Kreuzschraffur), Gealtert (Randverdunklung via radialer Gradient).  
+Realisierung als SVG `<pattern>` oder `<filter>` – kein externes Bild nötig, vollständig druckfähig.  
+Neues Feld `backgroundTexture: 'none' | 'parchment' | 'linen' | 'aged'` in `LayoutSettings`, kombinierbar mit `backgroundSkin`.
+
+### 🟡 Personenbox-Stilform
+Verschiedene Box-Formen wählbar: Rechteck (aktuell), abgerundetes Rechteck, Oval, Schild (klassisch genealogisch).  
+Neues Feld `boxShape: 'rect' | 'rounded' | 'oval' | 'shield'` in `LayoutSettings`.  
+`calculateBoxSize` und Render-Logik in `TreeCanvas.tsx` anpassen; für Oval/Schild mit SVG `<ellipse>` bzw. `<path>`.
+
+### 🟡 Schatten / Tiefenwirkung auf Personenboxen
+Optionaler Drop-Shadow per SVG `<filter>` mit `feDropShadow` – ein Filter-Element wird einmalig im `<defs>`-Block definiert und per `filter="url(#shadow)"` referenziert.  
+Neues Feld `boxShadow: number` (0 = aus, 1–5 = Stärke) in `LayoutSettings`.
+
+### 🟡 Generationsband-Schattierung
+Alternierende horizontale Hintergrundstreifen pro Generationszeile, ähnlich Tabellenzeilen.  
+Als `<rect>`-Elemente im SVG-Hintergrund, noch vor den Personenboxen gerendert.  
+Neues Feld `showGenerationBands: boolean` in `LayoutSettings`.
+
+### 🟡 Familienwappen / Emblem-Platzhalter
+Optionaler Wappenbereich oben mittig im SVG (Schild- oder Kreisform).  
+Nutzer kann eine Base64-PNG/SVG hinterlegen; Fallback: Initialen des häufigsten Nachnamens.  
+Neues Feld `coatOfArmsUrl?: string` in `LayoutSettings`; gerendert als `<image>`-Element.
+
+### 🟢 Verbindungslinien-Stil: Kalligraphisch
+Linienstil `'calligraphic'`: Verbindungslinien wirken wie mit einer Breitfeder gezogen – breiter an Kurvenbögen, schmaler an geraden Abschnitten.  
+Umsetzung mit doppelt gezeichneten versetzten Pfaden (`stroke-linecap="round"`, `stroke-dasharray`-Tricks) oder einer variablen Dicken-Map pro Wegpunkt.  
+Neues `LineStyle`-Enum-Wert `'calligraphic'`.
+
+### 🟢 Export als hochauflösendes PNG (Druckqualität)
+Schaltfläche „Als PNG exportieren (3×-Auflösung)" skaliert das SVG 3-fach und lädt es als `.png` herunter.  
+Neue Hilfsfunktion `lib/exportPng.ts`; kein externes Paket nötig – nutzt `URL.createObjectURL` + natives `<canvas>` + `ctx.drawImage`.  
+Alle im SVG eingebetteten Fonts und Filter bleiben durch das Hochskalieren vollständig erhalten.
+
+---
+
+## 11. Statistiken & Analyse
 
 ### 🟡 Baum-Statistiken Dashboard
 Separate Ansicht pro Baum: Anzahl Personen, Generationen, älteste/jüngste Person, häufigste Vornamen, geografische Verteilung der Geburtsorte.

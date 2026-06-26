@@ -347,6 +347,7 @@ export default function App() {
         <GedcomUploadDialog
           open={gedcomOpen}
           treeName={currentTree.name}
+          existingPeople={currentTree.people}
           onClose={() => setGedcomOpen(false)}
           onImport={handleGedcomImport}
         />
