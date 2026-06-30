@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { FamilyTree } from '../types';
-import { Plus, Eye, Trash2, Upload, Pencil, Copy } from 'lucide-react';
+import { Plus, Eye, Trash2, Upload, Pencil, Copy, BarChart2 } from 'lucide-react';
 import { formatDate } from '../utils/dateFormat';
 
 interface ViewListProps {
@@ -11,6 +11,7 @@ interface ViewListProps {
   onRenameView: (viewId: string, newName: string) => void;
   onDuplicateView: (viewId: string) => void;
   onUploadGedcom: () => void;
+  onShowStats: () => void;
   onBack: () => void;
   onLogout: () => void;
   userEmail: string;
@@ -24,6 +25,7 @@ export function ViewList({
   onRenameView,
   onDuplicateView,
   onUploadGedcom,
+  onShowStats,
   onBack,
   onLogout,
   userEmail
@@ -85,6 +87,14 @@ export function ViewList({
                 {tree.people.length.toLocaleString()} people loaded
               </p>
             </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onShowStats}
+              className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2 rounded-md hover:opacity-90"
+            >
+              <BarChart2 className="w-4 h-4" />
+              Statistics
+            </button>
             <button
               onClick={onUploadGedcom}
               className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2 rounded-md hover:opacity-90"
@@ -92,6 +102,7 @@ export function ViewList({
               <Upload className="w-4 h-4" />
               Upload GEDCOM
             </button>
+          </div>
           </div>
         </div>
 

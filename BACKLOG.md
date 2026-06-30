@@ -327,7 +327,7 @@ Optionaler Wappenbereich oben mittig im SVG (Schild- oder Kreisform).
 Nutzer kann eine Base64-PNG/SVG hinterlegen; Fallback: Initialen des häufigsten Nachnamens.  
 Neues Feld `coatOfArmsUrl?: string` in `LayoutSettings`; gerendert als `<image>`-Element.
 
-### 🟢 Verbindungslinien-Stil: Kalligraphisch
+### ✅ Verbindungslinien-Stil: Kalligraphisch (umgesetzt)
 Linienstil `'calligraphic'`: Verbindungslinien wirken wie mit einer Breitfeder gezogen – breiter an Kurvenbögen, schmaler an geraden Abschnitten.  
 Umsetzung mit doppelt gezeichneten versetzten Pfaden (`stroke-linecap="round"`, `stroke-dasharray`-Tricks) oder einer variablen Dicken-Map pro Wegpunkt.  
 Neues `LineStyle`-Enum-Wert `'calligraphic'`.
@@ -341,7 +341,7 @@ Alle im SVG eingebetteten Fonts und Filter bleiben durch das Hochskalieren volls
 
 ## 11. Statistiken & Analyse
 
-### 🟡 Baum-Statistiken Dashboard
+### ✅ Baum-Statistiken Dashboard (umgesetzt)
 Separate Ansicht pro Baum: Anzahl Personen, Generationen, älteste/jüngste Person, häufigste Vornamen, geografische Verteilung der Geburtsorte.
 
 ### 🟡 Fehlende Daten-Anzeige

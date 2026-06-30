@@ -244,6 +244,7 @@ export function LayoutSettings({ layout, onUpdate }: LayoutSettingsProps) {
                 >
                   <option value="rounded">Rounded corners</option>
                   <option value="straight">Straight lines</option>
+                  <option value="calligraphic">Calligraphic</option>
                 </select>
               </div>
               <CheckRow

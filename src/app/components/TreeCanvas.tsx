@@ -916,6 +916,18 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
       return boxColor === 'white' ? layout.borderColor : boxColor;
     };
 
+    // ── Calligraphic stroke-width helper ─────────────────────────────────────
+    // Simulates a broad-nib calligraphy pen held vertically:
+    // horizontal strokes (pen perpendicular to nib) → thick
+    // vertical strokes (pen parallel to nib) → thin
+    const segWidth = (x1: number, y1: number, x2: number, y2: number): number => {
+      if (layout.lineStyle !== 'calligraphic') return layout.lineWidth;
+      const isHorizontal = Math.abs(x2 - x1) > Math.abs(y2 - y1);
+      return isHorizontal
+        ? Math.max(1, layout.lineWidth * 2.5)
+        : Math.max(0.5, layout.lineWidth * 0.6);
+    };
+
     // ── Rounded-corner path helper ────────────────────────────────────────────
     // Takes an ordered list of orthogonal waypoints and returns an SVG path string
     // where every interior 90° corner is replaced by a quadratic Bézier curve of
@@ -1233,18 +1245,18 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
       // Straight: draw each waypoint segment individually
       for (let i = 0; i < fdPts.length - 1; i++) {
         const [x1, y1] = fdPts[i], [x2, y2] = fdPts[i + 1];
-        lines.push(<line key={`fd-${ck}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`fd-${ck}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={coupleLineColor} strokeWidth={segWidth(x1, y1, x2, y2)}/>);
       }
       addPathLength(fdPts);
       for (let i = 0; i < mdPts.length - 1; i++) {
         const [x1, y1] = mdPts[i], [x2, y2] = mdPts[i + 1];
-        lines.push(<line key={`md-${ck}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`md-${ck}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={coupleLineColor} strokeWidth={segWidth(x1, y1, x2, y2)}/>);
       }
       addPathLength(mdPts);
       // For same-gen parents draw the explicit horizontal bar at dropY (for multi-child
       // it connects the two vertical drops; for single-child it's drawn below instead).
       if (!isMultiChild && fatherNode.generation === motherNode.generation) {
-        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={segWidth(fatherCenterX, dropY, motherCenterX, dropY)}/>);
         addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
       }
     }
@@ -1302,7 +1314,7 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
           pts.forEach(([,], i) => {
             if (i === pts.length - 1) return;
             const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
-            lines.push(<line key={`skip-${child.person.id}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+            lines.push(<line key={`skip-${child.person.id}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={coupleLineColor} strokeWidth={segWidth(x1, y1, x2, y2)}/>);
           });
         }
         addPathLength(pts);
@@ -1312,7 +1324,7 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
         if (layout.lineStyle === 'rounded') {
           if (Math.abs(childCenterX - parentsMidX) < 1) {
             // Vertically aligned: straight drop, no corners
-            lines.push(<line key={`cv-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+            lines.push(<line key={`cv-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={segWidth(parentsMidX, dropY, childCenterX, childTopY)}/>);
             addLineLength(parentsMidX, dropY, childCenterX, childTopY);
           } else {
             const pts: Array<[number, number]> = [[parentsMidX, dropY], [parentsMidX, midY], [childCenterX, midY], [childCenterX, childTopY]];
@@ -1320,13 +1332,13 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
             addPathLength(pts);
           }
         } else {
-          lines.push(<line key={`pm-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={midY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`pm-${child.person.id}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={midY} stroke={coupleLineColor} strokeWidth={segWidth(parentsMidX, dropY, parentsMidX, midY)}/>);
           addLineLength(parentsMidX, dropY, parentsMidX, midY);
           if (Math.abs(childCenterX - parentsMidX) > 1) {
-            lines.push(<line key={`ch-${child.person.id}`} x1={parentsMidX} y1={midY} x2={childCenterX} y2={midY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+            lines.push(<line key={`ch-${child.person.id}`} x1={parentsMidX} y1={midY} x2={childCenterX} y2={midY} stroke={coupleLineColor} strokeWidth={segWidth(parentsMidX, midY, childCenterX, midY)}/>);
             addLineLength(parentsMidX, midY, childCenterX, midY);
           }
-          lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={midY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={midY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={segWidth(childCenterX, midY, childCenterX, childTopY)}/>);
           addLineLength(childCenterX, midY, childCenterX, childTopY);
         }
       }
@@ -1344,20 +1356,20 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
       if (layout.lineStyle !== 'rounded' && fatherNode.generation === motherNode.generation) {
         // Straight + same-gen parents: explicit horizontal bar at dropY.
         // For different-gen parents this is already handled by the fd/md detour paths.
-        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`ph-${ck}`} x1={fatherCenterX} y1={dropY} x2={motherCenterX} y2={dropY} stroke={coupleLineColor} strokeWidth={segWidth(fatherCenterX, dropY, motherCenterX, dropY)}/>);
         addLineLength(fatherCenterX, dropY, motherCenterX, dropY);
       }
       // Stem from parent midpoint down to child spine (T-intersection at both ends)
-      lines.push(<line key={`stem-${ck}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={childSpineY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+      lines.push(<line key={`stem-${ck}`} x1={parentsMidX} y1={dropY} x2={parentsMidX} y2={childSpineY} stroke={coupleLineColor} strokeWidth={segWidth(parentsMidX, dropY, parentsMidX, childSpineY)}/>);
       addLineLength(parentsMidX, dropY, parentsMidX, childSpineY);
       // Horizontal child spine (T-intersections with stem above and child drops below)
-      lines.push(<line key={`spine-${ck}`} x1={childSpineLeft} y1={childSpineY} x2={childSpineRight} y2={childSpineY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+      lines.push(<line key={`spine-${ck}`} x1={childSpineLeft} y1={childSpineY} x2={childSpineRight} y2={childSpineY} stroke={coupleLineColor} strokeWidth={segWidth(childSpineLeft, childSpineY, childSpineRight, childSpineY)}/>);
       addLineLength(childSpineLeft, childSpineY, childSpineRight, childSpineY);
       // Vertical drop to each child's box top – all use the couple's line color
       sortedChildren.forEach(child => {
         const childCenterX = child.x + child.width / 2;
         const childTopY = getNodePixelY(child);
-        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={childSpineY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={layout.lineWidth}/>);
+        lines.push(<line key={`cv-${child.person.id}`} x1={childCenterX} y1={childSpineY} x2={childCenterX} y2={childTopY} stroke={coupleLineColor} strokeWidth={segWidth(childCenterX, childSpineY, childCenterX, childTopY)}/>);
         addLineLength(childCenterX, childSpineY, childCenterX, childTopY);
       });
     }
@@ -1389,7 +1401,7 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
         pts.forEach(([,], i) => {
           if (i === pts.length - 1) return;
           const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
-          lines.push(<line key={`skip-sp-${node.person.id}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`skip-sp-${node.person.id}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={getLineColor(node)} strokeWidth={segWidth(x1, y1, x2, y2)}/>);
         });
       }
       addPathLength(pts);
@@ -1397,7 +1409,7 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
         if (Math.abs(childCenterX - parentCenterX) < 1) {
           // Vertically aligned: straight line, no corners
           lines.push(
-            <line key={`single-parent-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={childCenterX} y2={childTopY} stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>
+            <line key={`single-parent-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={childCenterX} y2={childTopY} stroke={getLineColor(node)} strokeWidth={segWidth(parentCenterX, parentBottomY, childCenterX, childTopY)}/>
           );
           addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
         } else {
@@ -1425,15 +1437,15 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
               key={`single-parent-${node.person.id}`}
               x1={parentCenterX} y1={parentBottomY}
               x2={childCenterX} y2={childTopY}
-              stroke={getLineColor(node)} strokeWidth={layout.lineWidth}
+              stroke={getLineColor(node)} strokeWidth={segWidth(parentCenterX, parentBottomY, childCenterX, childTopY)}
             />
           );
           addLineLength(parentCenterX, parentBottomY, childCenterX, childTopY);
         } else {
           const midY = Math.round((parentBottomY + childTopY) / 2);
-          lines.push(<line key={`sp-v1-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={parentCenterX} y2={midY} stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>);
-          lines.push(<line key={`sp-h-${node.person.id}`}  x1={parentCenterX} y1={midY}          x2={childCenterX}  y2={midY}          stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>);
-          lines.push(<line key={`sp-v2-${node.person.id}`} x1={childCenterX}  y1={midY}          x2={childCenterX}  y2={childTopY}     stroke={getLineColor(node)} strokeWidth={layout.lineWidth}/>);
+          lines.push(<line key={`sp-v1-${node.person.id}`} x1={parentCenterX} y1={parentBottomY} x2={parentCenterX} y2={midY} stroke={getLineColor(node)} strokeWidth={segWidth(parentCenterX, parentBottomY, parentCenterX, midY)}/>);
+          lines.push(<line key={`sp-h-${node.person.id}`}  x1={parentCenterX} y1={midY}          x2={childCenterX}  y2={midY}          stroke={getLineColor(node)} strokeWidth={segWidth(parentCenterX, midY, childCenterX, midY)}/>);
+          lines.push(<line key={`sp-v2-${node.person.id}`} x1={childCenterX}  y1={midY}          x2={childCenterX}  y2={childTopY}     stroke={getLineColor(node)} strokeWidth={segWidth(childCenterX, midY, childCenterX, childTopY)}/>);
           addLineLength(parentCenterX, parentBottomY, parentCenterX, midY);
           addLineLength(parentCenterX, midY, childCenterX, midY);
           addLineLength(childCenterX, midY, childCenterX, childTopY);

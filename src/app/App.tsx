@@ -3,6 +3,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { TreeList } from './components/TreeList';
 import { ViewList } from './components/ViewList';
 import { ViewEditor } from './components/ViewEditor';
+import { TreeStatsView } from './components/TreeStatsView';
 import { GedcomUploadDialog } from './components/GedcomUploadDialog';
 import { FamilyTree, SavedView, defaultLayoutSettings, Person } from './types';
 import { sampleTree } from './sampleData';
@@ -10,7 +11,7 @@ import * as db from './lib/db';
 import { supabaseAvailable } from './lib/supabase';
 import { deriveSurname, makeUniqueName } from './utils/naming';
 
-type AppView = 'login' | 'treeList' | 'viewList' | 'viewEditor';
+type AppView = 'login' | 'treeList' | 'viewList' | 'viewEditor' | 'treeStats';
 
 /** Matches the auto-generated default tree names so they can be safely replaced. */
 const DEFAULT_TREE_NAME_RE = /^(Family Tree \d+|New Tree)$/i;
@@ -297,6 +298,7 @@ export default function App() {
   // ── Navigation helpers ────────────────────────────────────────────────────
   const handleBackToViewList = () => { setCurrentViewId(null); setView('viewList'); };
   const handleBackToTreeList = () => { setCurrentTreeId(null); setCurrentViewId(null); setView('treeList'); };
+  const handleOpenStats = () => setView('treeStats');
 
   const currentTree = trees.find((t) => t.id === currentTreeId);
   const currentView = currentTree?.savedViews.find((v) => v.id === currentViewId);
@@ -326,10 +328,15 @@ export default function App() {
           onRenameView={handleRenameView}
           onDuplicateView={handleDuplicateView}
           onUploadGedcom={handleUploadGedcom}
+          onShowStats={handleOpenStats}
           onBack={handleBackToTreeList}
           onLogout={handleLogout}
           userEmail={userEmail}
         />
+      )}
+
+      {view === 'treeStats' && currentTree && (
+        <TreeStatsView tree={currentTree} onBack={handleBackToViewList} />
       )}
 
       {view === 'viewEditor' && currentTree && (

@@ -30,7 +30,7 @@ export type GraphType = 'ancestor' | 'descendant' | 'hourglass';
 export type BackgroundSkin = 'white' | 'cream' | 'light-blue' | 'light-green';
 export type ColorScheme = 'uniform' | 'by-grandparent' | 'by-great-grandparent' | 'by-parish';
 export type DateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' | 'DD MMM YYYY';
-export type LineStyle = 'straight' | 'rounded';
+export type LineStyle = 'straight' | 'rounded' | 'calligraphic';
 export type LineColorMode = 'border' | 'subtree';
 
 export interface LayoutSettings {
